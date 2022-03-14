@@ -1,5 +1,4 @@
 use std::{iter::Peekable, str::Chars, error::Error};
-use regex::Regex;
 use std::char::*;
 
 use crate::utils::*;
@@ -16,12 +15,13 @@ pub enum Token {
     Comma, Semicolon, // , ;
     Let,In,End, // let in end
     Fn, EArrow, MArrow, // fn => ->
+    Add,Sub,Mul,Div, // + - * /
+    Equal,
     Int(i64),
     Real(f64),
     Bool(bool),
     Var(String),
 }
-
 
 pub struct Lexer<'src> {
     pub source: &'src str,
@@ -73,8 +73,14 @@ impl<'src> Lexer<'src> {
     }
 
     #[inline]
-    fn end(&self, start: Position) -> Span {
+    fn success(&self, start: Position) -> Span {
         Span::new(start,self.current)
+    }
+
+    #[inline]
+    fn failed<T>(&mut self, start: Position) -> Option<T> {
+        self.current = start;
+        None
     }
 
     #[inline]
@@ -82,6 +88,7 @@ impl<'src> Lexer<'src> {
         &self.source[span.start.abs .. span.end.abs]
     }
 
+    /*
     #[inline]
     fn next_slice(&mut self) -> Option<Span> {
         self.eat_space();
@@ -104,6 +111,7 @@ impl<'src> Lexer<'src> {
             _ => { return None }
         }
     }
+    */
 
     #[inline]
     fn satisfy<F: Fn(char) -> bool>(&mut self, pred: F) -> Option<()> {
@@ -115,8 +123,6 @@ impl<'src> Lexer<'src> {
             None
         }
     }
-    
-    
 
     /// Consume characters from the input stream while pred(peek()) is true,
     /// collecting the characters into a string.
@@ -140,61 +146,84 @@ impl<'src> Lexer<'src> {
         self.while_satisfy(char::is_whitespace);
     }
 
-    fn lexer(&mut self) -> Option<Spanned<Token>> {
-        self.eat_space();
-        match self.peek()? {
-
-
-        }
-    }
-
     fn read_punct(&mut self) -> Option<Spanned<Token>> {
         
         let start = self.start();
         let tok;
         
-        match self.next()? {
-            ';' => { self.next(); tok = Token::Semicolon }
-            ',' => { self.next(); tok = Token::Comma }
-            '(' => { self.next(); tok = Token::LParen }
-            ')' => { self.next(); tok = Token::RParen }
-            '[' => { self.next(); tok = Token::LBracket }
-            ']' => { self.next(); tok = Token::RBracket }
-            '{' => { self.next(); tok = Token::LBrace }
-            '}' => { self.next(); tok = Token::RBrace }
+        match self.peek()? {
+            ';' => { self.next(); tok = Token::Semicolon; }
+            ',' => { self.next(); tok = Token::Comma; }
+            '(' => { self.next(); tok = Token::LParen; }
+            ')' => { self.next(); tok = Token::RParen; }
+            '[' => { self.next(); tok = Token::LBracket; }
+            ']' => { self.next(); tok = Token::RBracket; }
+            '{' => { self.next(); tok = Token::LBrace; }
+            '}' => { self.next(); tok = Token::RBrace; }
             '-' => {
+                self.next();
                 if self.next()? == '>' {
-                    tok = Token::MArrow
+                    tok = Token::MArrow;
                 } else {
-                    return None
+                    tok = Token::Sub;
                 }
             }
             '=' => {
                 if self.next()? == '>' {
-                    tok = Token::MArrow
+                    tok = Token::EArrow;
                 } else {
-                    return None
+                    tok = Token::Equal;
                 }
+            }
+            x if char::is_numeric(x) => {
+                return self.read_nat();
+            }
+            x if char::is_alphabetic(x) => {
+                return self.read_keyword();
             }
             _ => { return None }
         }
 
-        let span = self.end(start);
+        let span = self.success(start);
 
         Some(Spanned::new(tok,span))
     }
 
-
-
-
-    fn read_next(&mut self) -> Option<Spanned<Token>> {
-
-
-
-
-
-
+    /// Lex a natural number
+    fn read_nat(&mut self) -> Option<Spanned<Token>> {
+        // Since we peeked at least one numeric char, we should always
+        // have a string containing at least 1 single digit, as such
+        // it is safe to call unwrap() on str::parse<u32>
+        let start = self.start();
+        self.while_satisfy(char::is_numeric);
+        let span = self.success(start);
+        let str = self.get_slice(span);
+        let n = str.parse::<usize>().ok()?;
+        Some(Spanned::new(Token::Int(n as i64), span))
     }
+
+
+    fn read_keyword(&mut self) -> Option<Spanned<Token>> {
+        let start = self.start();
+        self.while_satisfy(char::is_alphabetic);
+        let span = self.success(start);
+        self.satisfy(char::is_whitespace)?;
+        let str = self.get_slice(span);
+        let tok;
+        match str {
+            "let" => { tok = Token::Let; }
+            "in" => { tok = Token::In; }
+            "end" => { tok = Token::End; }
+            _ => { return self.failed(start) }
+        }
+        let span = self.success(start);
+        Some(Spanned::new(tok,span))
+    }
+
+    fn read_ident(&mut self) -> Option<Spanned<Token>> {
+        unimplemented!()
+    }
+
 
     #[inline]
     fn valid_symbolic(c: char) -> bool {
@@ -275,15 +304,7 @@ impl<'src> Lexer<'src> {
         ))
     }
 
-    /// Lex a natural number
-    fn number(&mut self) -> Option<Spanned<Token>> {
-        // Since we peeked at least one numeric char, we should always
-        // have a string containing at least 1 single digit, as such
-        // it is safe to call unwrap() on str::parse<u32>
-        let (data, span) = self.consume_while(char::is_numeric);
-        let n = data.parse::<usize>().ok()?;
-        Some(Spanned::new(Token::Const(Const::Int(n)), span))
-    }
+    
 
     fn char_lit(&mut self) -> Option<Spanned<Token>> {
         let sp = self.current;
