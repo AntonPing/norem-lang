@@ -1,13 +1,14 @@
-use crate::lexer::*;
+use crate::{lexer::*, utils::Span};
 
 #[derive(Debug)]
 pub struct Parser<'src> {
     pub lexer: Lexer<'src>,
-    pub input: Iter<Token>,
-    pub current: Position,
+    pub tokens: Vec<Token>,
+    pub spans: Vec<Span>,
+    pub current: usize,
 }
 
-impl Parser {
+impl<'src> Parser<'src> {
     pub fn new(str: String) -> Parser {
         Parser { text: str, index: 0 }
     }

@@ -393,42 +393,31 @@ impl<'src> Lexer<'src> {
         }
     }
 }
+*/
+}
 
-impl<'s, 'sym> Iterator for Lexer<'s, 'sym> {
+impl<'src> Iterator for Lexer<'src> {
     type Item = Spanned<Token>;
     fn next(&mut self) -> Option<Self::Item> {
         self.lex()
     }
 }
 
+
 #[cfg(test)]
-mod test {
-    use super::*;
+fn keyword_test() {
+    let lex = Lexer::new(&"fn(1234]let->".to_string());
 
-    fn _span(a: u32, b: u32) -> Span {
-        Span::new(Location::new(0, a as u16, a), Location::new(0, b as u16, b))
-    }
-
-    #[test]
-    fn keywords() {
-        let mut int = Interner::with_capacity(64);
-        let lex = Lexer::new("andalso and fn ...".chars(), &mut int);
-
-        let tks = lex.collect::<Vec<Spanned<Token>>>();
-        assert_eq!(
-            tks,
-            vec![
-                Spanned::new(Token::Andalso, _span(0, 7)),
-                Spanned::new(Token::And, _span(8, 11)),
-                Spanned::new(Token::Fn, _span(12, 14)),
-                Spanned::new(Token::Flex, _span(15, 18)),
-            ]
-        );
-        assert_eq!(
-            tks.into_iter().map(|s| s.span).collect::<Vec<_>>(),
-            vec![_span(0, 7), _span(8, 11), _span(12, 14), _span(15, 18),]
-        )
-    }
-    */
+    let tks = lex.collect::<Vec<Spanned<Token>>>();
+    assert_eq!(
+        tks.into_iter().map(|s| s.data),
+        vec![
+            Token::Fn,
+            Token::LParen,
+            Token::Int(1234),
+            Token::Let,
+            Token::MArrow,
+        ]
+    );
 }
 
