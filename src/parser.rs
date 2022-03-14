@@ -1,42 +1,35 @@
-use crate::{lexer::*, utils::Span};
+use logos::Span;
 
-#[derive(Debug)]
+use crate::lexer::*;
+
+
+
+
 pub struct Parser<'src> {
     pub lexer: Lexer<'src>,
-    pub tokens: Vec<Token>,
-    pub spans: Vec<Span>,
-    pub current: usize,
+    pub tokens: Vec<(Token,Span)>,
+    pub index: usize,
 }
 
 impl<'src> Parser<'src> {
-    pub fn new(str: String) -> Parser {
-        Parser { text: str, index: 0 }
+    pub fn new(string: &'src String) -> Parser {
+        Parser { 
+            lexer: Lexer::from_string(string),
+            tokens: Vec::new(),
+            index: 0,
+        }
     }
+    pub fn next(&mut self) -> Option<Token> {
+
+    }
+
+
     pub fn is_end(&mut self) -> Option<()> {
-        assert!(self.index <= self.text.len());
+        assert!(self.index <= self.lexer.len());
         if self.index == self.text.len() { Some(()) }
         else { None }
     }
-    pub fn skip_space(&mut self) {
-        assert!(self.index <= self.text.len());
-        loop {
-            if self.index == self.text.len() {
-                break;  
-            }
-            match self.text.as_bytes()[self.index] {
-                b' ' | b'\n' | b'\r' | b'\t' => {
-                    self.index += 1;
-                }
-                _ => { break; }
-            }
-        }
-    }
-    pub fn read_regex(&mut self, regex: &Regex) -> Option<&str> {
-        let mat = regex.find(&self.text[self.index..])?;
-        assert_eq!(mat.start(), 0);
-        self.index += mat.end();
-        Some(mat.as_str())
-    }
+
     pub fn read_string(&mut self, string: &str) -> Option<()> {
         let new_index = self.index + string.len();
         if new_index > self.text.len() {

@@ -36,7 +36,7 @@ impl<T> Spanned<T> {
     pub fn new(data: T, span: Span) -> Self {
         Spanned { data, span }
     }
-    /*
+    
     pub fn data(self) -> T {
         self.data
     }
@@ -54,7 +54,8 @@ impl<T> Spanned<T> {
             data: f(self.data, self.span),
         }
     }
-
+    
+    /*
     pub const fn zero(data: T) -> Self {
         Spanned {
             span: Span::zero(),

@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 typed-arena = "2.0.1"
 regex = "1.5.5"
+logos = "0.12.0"

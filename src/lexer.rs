@@ -1,423 +1,139 @@
-use std::{iter::Peekable, str::Chars, error::Error};
-use std::char::*;
+use std::{fmt::{Display, self}, borrow::Borrow};
 
-use crate::utils::*;
-
-#[test]
-fn test_lexer() {
-    println!("Hello, world!");
-}
-
-pub enum Token {
-    LParen, RParen, // ( )
-    LBracket, RBracket, // [ ]
-    LBrace, RBrace, // { }
-    Comma, Semicolon, // , ;
-    Let,In,End, // let in end
-    Fn, EArrow, MArrow, // fn => ->
-    Add,Sub,Mul,Div, // + - * /
-    Equal,
-    Int(i64),
-    Real(f64),
-    Bool(bool),
-    Var(String),
-}
+use logos::{self,Span};
 
 pub struct Lexer<'src> {
-    pub source: &'src str,
-    pub input: Peekable<Chars<'src>>,
-    pub current: Position,
+    lexer: logos::Lexer<'src,Token>,
+    token: Token, // this is a buffer for peeking
 }
 
 impl<'src> Lexer<'src> {
-    pub fn new(string: &'src String) -> Lexer<'src> {
+    pub fn from_string(string: &'src String) -> Lexer<'src> {
         Lexer {
-            source: string.as_str(),
-            input: string.chars().peekable(),
-            current: Position {
-                line: 0,
-                col: 0,
-                abs: 0,
-            },
+            lexer: logos::Lexer::new(string.as_str()),
+            token: Token::Error // need initialize
         }
     }
-
-    /// Peek at the next [`char`] in the input stream
-    #[inline]
-    fn peek(&mut self) -> Option<char> {
-        self.input.peek().copied()
+    pub fn next(&mut self) -> Option<Token> {
+        if let Some(tok) = self.lexer.next() {
+            self.token = tok.clone();
+            Some(tok)
+        } else { None }
     }
-
-    /// Consume the next [`char`] and advance internal source position
-    #[inline]
-    fn next(&mut self) -> Option<char> {
-        match self.input.next() {
-            Some('\n') => {
-                self.current.line += 1;
-                self.current.col = 0;
-                self.current.abs += 1;
-                Some('\n')
-            }
-            Some(ch) => {
-                self.current.col += 1;
-                self.current.abs += 1;
-                Some(ch)
-            }
-            None => None,
+    pub fn token(&self) -> Token {
+        // peeking the last token
+        self.token.clone()
+    }
+    pub fn span(&self) -> Span {
+        self.lexer.span()
+    }
+    pub fn slice(&self) -> &'src str  {
+        self.lexer.slice()
+    }
+    fn dump_all(&mut self, f: &mut fmt::Formatter) -> fmt::Result {
+        while let Some(t) = self.next() {
+            writeln!(f,"{:?} {:?} {}",t,self.span(),self.slice())?;
         }
+        Ok(())
     }
+}
 
-    #[inline]
-    fn start(&self) -> Position {
-        self.current
+impl<'src> Display for Lexer<'src> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"{:?} {:?} {}",self.token(),self.span(),self.slice())
     }
-
-    #[inline]
-    fn success(&self, start: Position) -> Span {
-        Span::new(start,self.current)
-    }
-
-    #[inline]
-    fn failed<T>(&mut self, start: Position) -> Option<T> {
-        self.current = start;
-        None
-    }
-
-    #[inline]
-    fn get_slice(&self, span: Span) -> &'src str {
-        &self.source[span.start.abs .. span.end.abs]
-    }
-
-    /*
-    #[inline]
-    fn next_slice(&mut self) -> Option<Span> {
-        self.eat_space();
-        let start = self.start();
-        match self.next()? {
-            '(' | ')' | '[' | ']' | '{' | '}' => {
-                return Some(self.end(start));
-            }
-            '-' | '=' => {
-                if self.peek()? == '>' {
-                    self.next().unwrap();
-                } 
-                return Some(self.end(start));
-            }
-            ch if ch.is_ascii_alphabetic() => {
-                while let Some(ch) = self.next()
-
-            }
-
-            _ => { return None }
-        }
-    }
-    */
-
-    #[inline]
-    fn satisfy<F: Fn(char) -> bool>(&mut self, pred: F) -> Option<()> {
-        let ch = self.peek()?;
-        if pred(ch) {
-            self.next().unwrap();
-            Some(())
-        } else {
-            None
-        }
-    }
-
-    /// Consume characters from the input stream while pred(peek()) is true,
-    /// collecting the characters into a string.
-    #[inline]
-    fn while_satisfy<F: Fn(char) -> bool>(&mut self, pred: F) {
-        while let Some(n) = self.peek() {
-            if pred(n) {
-                match self.next() {
-                    Some(_) => continue,
-                    None => break,
-                }
-            } else {
-                break;
-            }
-        }
-    }
-
-    /// Eat whitespace
-    #[inline]
-    fn eat_space(&mut self) {
-        self.while_satisfy(char::is_whitespace);
-    }
-
-    fn read_punct(&mut self) -> Option<Spanned<Token>> {
-        
-        let start = self.start();
-        let tok;
-        
-        match self.peek()? {
-            ';' => { self.next(); tok = Token::Semicolon; }
-            ',' => { self.next(); tok = Token::Comma; }
-            '(' => { self.next(); tok = Token::LParen; }
-            ')' => { self.next(); tok = Token::RParen; }
-            '[' => { self.next(); tok = Token::LBracket; }
-            ']' => { self.next(); tok = Token::RBracket; }
-            '{' => { self.next(); tok = Token::LBrace; }
-            '}' => { self.next(); tok = Token::RBrace; }
-            '-' => {
-                self.next();
-                if self.next()? == '>' {
-                    tok = Token::MArrow;
-                } else {
-                    tok = Token::Sub;
-                }
-            }
-            '=' => {
-                if self.next()? == '>' {
-                    tok = Token::EArrow;
-                } else {
-                    tok = Token::Equal;
-                }
-            }
-            x if char::is_numeric(x) => {
-                return self.read_nat();
-            }
-            x if char::is_alphabetic(x) => {
-                return self.read_keyword();
-            }
-            _ => { return None }
-        }
-
-        let span = self.success(start);
-
-        Some(Spanned::new(tok,span))
-    }
-
-    /// Lex a natural number
-    fn read_nat(&mut self) -> Option<Spanned<Token>> {
-        // Since we peeked at least one numeric char, we should always
-        // have a string containing at least 1 single digit, as such
-        // it is safe to call unwrap() on str::parse<u32>
-        let start = self.start();
-        self.while_satisfy(char::is_numeric);
-        let span = self.success(start);
-        let str = self.get_slice(span);
-        let n = str.parse::<usize>().ok()?;
-        Some(Spanned::new(Token::Int(n as i64), span))
-    }
+}
 
 
-    fn read_keyword(&mut self) -> Option<Spanned<Token>> {
-        let start = self.start();
-        self.while_satisfy(char::is_alphabetic);
-        let span = self.success(start);
-        self.satisfy(char::is_whitespace)?;
-        let str = self.get_slice(span);
-        let tok;
-        match str {
-            "let" => { tok = Token::Let; }
-            "in" => { tok = Token::In; }
-            "end" => { tok = Token::End; }
-            _ => { return self.failed(start) }
-        }
-        let span = self.success(start);
-        Some(Spanned::new(tok,span))
-    }
-
-    fn read_ident(&mut self) -> Option<Spanned<Token>> {
-        unimplemented!()
-    }
-
-
-    #[inline]
-    fn valid_symbolic(c: char) -> bool {
-        match c {
-            '!' | '%' | '&' | '$' | '#' | '+' | '-' | '/' | ':' | '<' | '=' | '>' | '?' | '@'
-            | '~' | '`' | '^' | '|' | '*' | '\\' | '.' => true,
-            _ => false,
-        }
-    }
+#[derive(logos::Logos, Debug, PartialEq,Clone)]
+pub enum Token {
+    #[token("(")]
+    LParen,
     
-    #[inline]
-    fn valid_id_char(c: char) -> bool {
-        match c {
-            x if x.is_alphanumeric() => true,
-            '_' | '\'' => true,
-            _ => false,
-        }
-    }
+    #[token(")")]
+    RParen,
 
-    /*
-    /// Lex a reserved keyword or identifier
-    fn keyword(&mut self) -> Spanned<Token> {
-        let (word, sp) = self.consume_while(Self::valid_id_char);
-        let word = self.interner.intern(word);
-        let kind = match word {
-            S_ABSTYPE => Token::Abstype,
-            S_AND => Token::And,
-            S_ANDALSO => Token::Andalso,
-            S_AS => Token::As,
-            S_CASE => Token::Case,
-            S_DATATYPE => Token::Datatype,
-            S_DO => Token::Do,
-            S_ELSE => Token::Else,
-            S_END => Token::End,
-            S_EXCEPTION => Token::Exception,
-            S_FN => Token::Fn,
-            S_FUN => Token::Fun,
-            S_FUNCTOR => Token::Functor,
-            S_HANDLE => Token::Handle,
-            S_IF => Token::If,
-            S_IN => Token::In,
-            S_INFIX => Token::Infix,
-            S_INFIXR => Token::Infixr,
-            S_LET => Token::Let,
-            S_LOCAL => Token::Local,
-            S_NONFIX => Token::Nonfix,
-            S_OF => Token::Of,
-            S_OP => Token::Op,
-            S_OPEN => Token::Open,
-            S_ORELSE => Token::Orelse,
-            S_PRIM => Token::Primitive,
-            S_RAISE => Token::Raise,
-            S_REC => Token::Rec,
-            S_THEN => Token::Then,
-            S_TYPE => Token::Type,
-            S_VAL => Token::Val,
-            S_WITH => Token::With,
-            S_WITHTYPE => Token::Withtype,
-            S_WHILE => Token::While,
-            S_SIG => Token::Sig,
-            S_SIGNATURE => Token::Signature,
-            S_STRUCT => Token::Struct,
-            S_STRUCTURE => Token::Structure,
-            _ => Token::Id(word),
-        };
-        Spanned::new(kind, sp)
-    }
-
-    fn string_lit(&mut self) -> Option<Spanned<Token>> {
-        self.consume()?;
-        let (s, sp) = self.consume_while(|c| c != '"');
-        if self.consume().is_none() {
-            return Some(Spanned::new(Token::MissingDelimiter('"'), sp));
-        }
-        Some(Spanned::new(
-            Token::Const(Const::String(self.interner.intern(s))),
-            sp,
-        ))
-    }
-
+    #[token("[")]
+    LBracket,
     
+    #[token("]")]
+    RBracket,
 
-    fn char_lit(&mut self) -> Option<Spanned<Token>> {
-        let sp = self.current;
-        match self.consume()? {
-            '"' => {}
-            c => return Some(Spanned::new(Token::Invalid(c), Span::new(sp, self.current))),
-        }
-        // TODO: return invalid on fail
-        let ch = self.consume()?;
-        match self.consume() {
-            Some('"') => Some(Spanned::new(
-                Token::Const(Const::Char(ch)),
-                Span::new(sp, self.current),
-            )),
-            Some(c) => Some(Spanned::new(Token::Invalid(c), Span::new(sp, self.current))),
-            None => Some(Spanned::new(
-                Token::MissingDelimiter('\''),
-                Span::new(sp, self.current),
-            )),
-        }
-    }
+    #[token("{")]
+    LBrace,
+    
+    #[token("}")]
+    RBrace,
 
-    fn comment(&mut self) -> Option<Spanned<Token>> {
-        let (_, sp) = self.consume_while(|ch| ch != '*');
-        self.consume()?;
-        match self.peek() {
-            Some(')') => {
-                self.consume();
-                self.lex()
-            }
-            Some(_) => self.comment(),
-            None => Some(Spanned::new(Token::MissingDelimiter('*'), sp)),
-        }
-    }
+    #[token(",")]
+    Comma,
+    
+    #[token(";")]
+    Semicolon,
 
-    pub fn lex(&mut self) -> Option<Spanned<Token>> {
-        self.consume_delimiter();
-        let sp = self.current;
+    #[token("let")]
+    Let,
+    
+    #[token("in")]
+    In,
+    
+    #[token("end")]
+    End,
 
-        macro_rules! eat {
-            ($kind:expr) => {{
-                self.consume().unwrap();
-                Some(Spanned::new($kind, Span::new(sp, self.current)))
-            }};
-        }
+    #[token("fn")]
+    Fn,
+    
+    #[token("=>")]
+    EArrow,
+    
+    #[token("->")]
+    Arrow,
+    
+    #[token("+")]
+    Add,
+    
+    #[token("-")]
+    Sub,
+    
+    #[token("*")]
+    Mul,
+    
+    #[token("/")]
+    Div,
 
-        match self.peek()? {
-            ';' => eat!(Token::Semi),
-            ',' => eat!(Token::Comma),
-            '\'' => eat!(Token::Apostrophe),
-            '_' => eat!(Token::Wildcard),
-            '(' => {
-                let alt = eat!(Token::LParen);
-                if let Some('*') = self.peek() {
-                    self.comment()
-                } else {
-                    alt
-                }
-            }
-            ')' => eat!(Token::RParen),
-            '{' => eat!(Token::LBrace),
-            '}' => eat!(Token::RBrace),
-            '[' => eat!(Token::LBracket),
-            ']' => eat!(Token::RBracket),
-            'λ' => eat!(Token::Fn),
-            '∀' => eat!(Token::Forall),
-            '#' => {
-                self.consume();
-                match self.peek() {
-                    Some('"') => self.char_lit(),
-                    Some(_) => Some(Spanned::new(Token::Selector, Span::new(sp, self.current))),
-                    _ => None,
-                }
-            }
-            '"' => self.string_lit(),
-            x if x.is_ascii_alphabetic() => Some(self.keyword()),
-            x if x.is_numeric() => self.number(),
-            x if Self::valid_symbolic(x) => Some(self.symbolic()),
-            ch => {
-                self.consume();
-                Some(Spanned::new(
-                    Token::Invalid(ch),
-                    Span::new(self.current, self.current),
-                ))
-            }
-        }
-    }
-}
-*/
+    #[token("=")]
+    Equal,
+
+    #[regex(r#"[0-9]+"#, |lex| lex.slice().parse() )]
+    Int(i64),
+
+    #[regex(r#"[0-9]+\.[0-9]+"#, |lex| lex.slice().parse() )]
+    Real(f64),
+
+    #[token("true", |_| true )]
+    #[token("false", |_| false )]
+    Bool(bool),
+
+    #[regex("\".+\"", |lex| lex.slice().parse())]
+    String(String),
+
+    #[regex(r#"[a-zA-Z][a-zA-Z]*"#, |lex| lex.slice().to_string())]
+    Var(String),
+
+    #[error]
+    #[regex(r"[ \t\n\r\f]+", logos::skip)]
+    Error,
 }
 
-impl<'src> Iterator for Lexer<'src> {
-    type Item = Spanned<Token>;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.lex()
+/// Comparing Reals are not recommanded
+// impl Eq for Token {}
+
+#[test]
+fn lexer_test() {
+    let string = "fn f x => { f 42 (true)}".to_string();
+    let mut lex = Lexer::from_string(&string);
+
+    while let Some(_) = lex.next() {
+        println!("{}", lex);
     }
 }
-
-
-#[cfg(test)]
-fn keyword_test() {
-    let lex = Lexer::new(&"fn(1234]let->".to_string());
-
-    let tks = lex.collect::<Vec<Spanned<Token>>>();
-    assert_eq!(
-        tks.into_iter().map(|s| s.data),
-        vec![
-            Token::Fn,
-            Token::LParen,
-            Token::Int(1234),
-            Token::Let,
-            Token::MArrow,
-        ]
-    );
-}
-
