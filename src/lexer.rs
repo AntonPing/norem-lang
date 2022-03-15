@@ -1,6 +1,8 @@
-use std::{fmt::{Display, self}, borrow::Borrow};
+use std::fmt::{Display, self};
 
 use logos::{self,Span};
+
+use crate::symbol::*;
 
 pub struct Lexer<'src> {
     lexer: logos::Lexer<'src,Token>,
@@ -114,7 +116,7 @@ pub enum Token {
     #[token("false", |_| false )]
     Bool(bool),
 
-    #[regex("\".+\"", |lex| lex.slice().parse())]
+    #[regex("\".+\"", |lex| lex.slice().to_string())]
     String(String),
 
     #[regex(r#"[a-zA-Z][a-zA-Z]*"#, |lex| lex.slice().to_string())]

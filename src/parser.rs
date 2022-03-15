@@ -1,60 +1,80 @@
-use logos::Span;
+use logos::{Lexer,Span};
 
-use crate::lexer::*;
-
-
-
+use crate::{lexer::*, symbol::SymTable};
 
 pub struct Parser<'src> {
-    pub lexer: Lexer<'src>,
-    pub tokens: Vec<(Token,Span)>,
-    pub index: usize,
+    lexer: Lexer<'src>,
+    table: SymTable<'src>,
+    stack: Vec<(Token,Span)>,
+    index: usize,
 }
 
 impl<'src> Parser<'src> {
     pub fn new(string: &'src String) -> Parser {
         Parser { 
             lexer: Lexer::from_string(string),
-            tokens: Vec::new(),
+            table: SymTable::with_capacity(256),
+            stack: Vec::new(),
             index: 0,
         }
     }
     pub fn next(&mut self) -> Option<Token> {
+        self.index += 1;
 
-    }
-
-
-    pub fn is_end(&mut self) -> Option<()> {
-        assert!(self.index <= self.lexer.len());
-        if self.index == self.text.len() { Some(()) }
-        else { None }
-    }
-
-    pub fn read_string(&mut self, string: &str) -> Option<()> {
-        let new_index = self.index + string.len();
-        if new_index > self.text.len() {
-            return None;
-        }
-        let cut = &self.text[self.index..new_index];
-        if string == cut {
-            self.index = new_index;
-            Some(())
+        if self.index > self.stack.len() {
+            if let Some(tok) = self.lexer.next() {
+                self.stack.push((tok,self.lexer.span()));
+                Some(tok)
+            } else {
+                None
+            }
         } else {
+            let (tok,_) = self.stack[self.index];
+            Some(tok)
+        }
+    }
+    pub fn token(&self) -> Token {
+        let (tok,_) = self.stack[self.index];
+        tok
+    }
+
+    pub fn span(&self) -> Span {
+
+    }
+
+    pub fn read_token(&mut self, token: Token) -> Option<()> {
+        let tok = self.next()?;
+        if tok == token {
+            Some(())
+        } else { None }
+    }
+
+    pub fn read_ident(&mut self) -> Option<String> {
+        let tok = self.next()?;
+        if let Token::Var(x) = tok {
+            Some(x)
+        } else { None }
+    }
+
+    pub fn read_int(&mut self) -> Option<i64> {
+        let tok = self.next()?;
+        if let Token::Int(x) = tok {
+            Some(x)
+        } else { None }
+    }
+
+    pub fn try_read<T>(&mut self, func: fn(&mut Parser)->Option<T>) -> Option<T> {
+        let record = self.index;
+        if let Some(value) = func(self) {
+            Some(value)
+        } else {
+            self.index = record;
             None
         }
     }
-    pub fn try_read<T>(&mut self,
-                func: fn(&mut Parser)->Option<T>) -> Option<T> {
-        let record = self.index;
-        if let Some(value) = func(self) {
-            return Some(value);
-        } else {
-            self.index = record;
-            return None;
-        }
-    }
+
     pub fn try_read_many<T>(&mut self,
-                funcs: Vec<fn(&mut Parser)->Option<T>>) -> Option<T> {
+            funcs: Vec<fn(&mut Parser)->Option<T>>) -> Option<T> {
         let record = self.index;
         for func in funcs.iter() {
             if let Some(value) = func(self) {
@@ -65,9 +85,8 @@ impl<'src> Parser<'src> {
         }
         None
     }
-    /*
-    pub fn try_peek<T>(&mut self,
-        func: fn(&mut Parser)->Option<T>) -> Option<T> {
+
+    pub fn try_peek<T>(&mut self,func: fn(&mut Parser)->Option<T>) -> Option<T> {
         let record = self.index;
         if let Some(value) = func(self) {
             self.index = record;
@@ -77,38 +96,9 @@ impl<'src> Parser<'src> {
             return None;
         }
     }
-    */
-    pub fn get_rest(&mut self) -> String {
-        String::from(&self.text[self.index..])
-    }
+
 }
 
-lazy_static::lazy_static! {
-    static ref CHAR_RE: Regex = Regex::new(
-        r"^.").unwrap();
-    static ref SPACE_RE: Regex = Regex::new(
-        r"^[\s\t\n]*").unwrap();
-    static ref INT_RE: Regex = Regex::new(
-        r"^\d+").unwrap();
-    static ref SYMB_RE: Regex = Regex::new(
-        r"^[_A-Za-z][_A-Za-z0-9]*").unwrap();
-    static ref PATH_RE: Regex = Regex::new(
-        r"^.+").unwrap();
-}
-
-pub fn read_int(par: &mut Parser) -> Option<i64> {
-    par.try_read(|p|{
-        let string = p.read_regex(&*INT_RE)?;
-        let result = string.parse::<i64>().ok()?;
-        Some(result)
-    })
-}
-pub fn read_symb(par: &mut Parser) -> Option<Symb> {
-    par.try_read(|p|{
-        let string = p.read_regex(&*SYMB_RE)?;
-        Some(Symb::new(string))
-    })
-}
 
 pub fn read_term(par: &mut Parser) -> Option<TermRef> {
     par.try_read_many(vec![
