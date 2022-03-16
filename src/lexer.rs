@@ -1,7 +1,8 @@
-use std::fmt::{Display, self};
+use std::fmt::Display;
 
-use logos::{self,Span};
+use logos::{self,Span,Logos,Lexer};
 
+/*
 use crate::symbol::*;
 
 pub struct Lexer<'src> {
@@ -45,9 +46,10 @@ impl<'src> Display for Lexer<'src> {
         write!(f,"{:?} {:?} {}",self.token(),self.span(),self.slice())
     }
 }
+*/
 
 
-#[derive(logos::Logos, Debug, PartialEq,Clone)]
+#[derive(Logos, Debug, Eq, PartialEq, Clone, Copy)]
 pub enum Token {
     #[token("(")]
     LParen,
@@ -106,21 +108,21 @@ pub enum Token {
     #[token("=")]
     Equal,
 
-    #[regex(r#"[0-9]+"#, |lex| lex.slice().parse() )]
-    Int(i64),
+    #[regex(r#"[0-9]+"#)]
+    Int,
 
-    #[regex(r#"[0-9]+\.[0-9]+"#, |lex| lex.slice().parse() )]
-    Real(f64),
+    #[regex(r#"[0-9]+\.[0-9]+"#)]
+    Real,
 
-    #[token("true", |_| true )]
-    #[token("false", |_| false )]
-    Bool(bool),
+    #[token("true")]
+    #[token("false")]
+    Bool,
 
-    #[regex("\".+\"", |lex| lex.slice().to_string())]
-    String(String),
+    #[regex("\".+\"")]
+    String,
 
-    #[regex(r#"[a-zA-Z][a-zA-Z]*"#, |lex| lex.slice().to_string())]
-    Var(String),
+    #[regex(r#"[a-zA-Z][a-zA-Z]*"#)]
+    Var,
 
     #[error]
     #[regex(r"[ \t\n\r\f]+", logos::skip)]
@@ -132,10 +134,11 @@ pub enum Token {
 
 #[test]
 fn lexer_test() {
-    let string = "fn f x => { f 42 (true)}".to_string();
-    let mut lex = Lexer::from_string(&string);
+    // let string = "fn f x => { f 42 (true)}";
+    let string = "fn f x => f x";
+    let mut lex = Lexer::<Token>::new(string);
 
-    while let Some(_) = lex.next() {
-        println!("{}", lex);
+    while let Some(tok) = lex.next() {
+        println!("{:?} [{:?}] \"{}\"", tok, lex.span(), lex.slice());
     }
 }

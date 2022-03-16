@@ -214,7 +214,6 @@ impl<'src> Lexer<'src> {
         })
     }
 
-
     fn read_keyword(&mut self) -> Option<Spanned<Token>> {
         let start = self.start();
         self.while_satisfy(char::is_alphabetic);
@@ -246,8 +245,6 @@ impl<'src> Lexer<'src> {
             span,
         ))
     }
-
-    
 
     fn char_lit(&mut self) -> Option<Spanned<Token>> {
         let sp = self.current;

@@ -1,141 +1,104 @@
-
 use logos::Span;
+use crate::symbol::*;
 
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Expr {
+    Lit(LitValue),
+    Var(Symbol),
+    Lam(Symbol, Box<Expr>),
+    App(Box<Expr>, Box<Expr>),
+    Let(Vec<DeclKind>,Box<Expr>),
+    Case(Box<Expr>, Vec<Rule>),
+    Ifte(Box<Expr>, Box<Expr>, Box<Expr>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Type {
+    Lit(LitType),
+    Var(Symbol),
+    Arr(Box<Type>, Box<Type>),
+    // Con(Symbol),
+}
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub struct Datatype {
-    pub tycon: Symbol,
-    pub tyvars: Vec<Symbol>,
-    pub constructors: Vec<Variant>,
+pub enum LitValue {
+    Int(i64),
+    Real(f64),
+    Bool(bool),
+    Char(char),
+}
+
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+pub enum LitType {
+    Int,
+    Real,
+    Bool,
+    Char,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Variant {
+    pub constr: Symbol,
+    pub args: Vec<Type>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DataDecl {
+    pub name: Symbol,
+    pub args: Vec<Symbol>,
+    pub branches: Vec<Variant>,
     pub span: Span,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub struct Typebind {
-    pub tycon: Symbol,
-    pub tyvars: Vec<Symbol>,
-    pub ty: Type,
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypeDecl {
+    pub name: Symbol,
+    pub args: Vec<Symbol>,
+    pub typ: Type,
+    pub span: Span,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
-pub enum Fixity {
-    Infix,
-    Infixr,
-    Nonfix,
+#[derive(Clone, Debug, PartialEq)]
+pub struct ValDecl {
+    pub name: Symbol,
+    pub args: Vec<Symbol>,
+    pub body: Box<Expr>,
+    pub span: Span,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub struct Primitive {
-    pub sym: Symbol,
-    pub ty: Type,
-}
-
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum DeclKind {
-    /// If `N` > 1, then we have potentially mutually recursive datatype
-    /// definitions
-    Datatype(Vec<Datatype>),
-    /// If `N` > 1, then we have mutually rec. type defs
-    Type(Vec<Typebind>),
-    /// Allow for mutually recursive function defs:
-    /// fun 'tyvars fnbindings1
-    ///             ...
-    ///      and    fnbindingsN
-    Function(Vec<Symbol>, Vec<Fun>),
-    Value(Vec<Symbol>, Pat, Expr),
-    Exception(Vec<Variant>),
-    Fixity(Fixity, u8, Symbol),
-    Local(Box<Decl>, Box<Decl>),
-    Seq(Vec<Decl>),
+    Data(DataDecl),
+    Type(TypeDecl),
+    Value(ValDecl),
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub enum TypeKind {
-    /// Type variable
-    Var(Symbol),
-    /// Constructor, with applied arguments
-    Con(Symbol, Vec<Type>),
-    /// Record type
-    Record(Vec<Row<Type>>),
-    /* Universally quantified type
-     * Univ(Symbol, Box<Type>), */
-}
-
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub enum ExprKind {
-    Andalso(Box<Expr>, Box<Expr>),
-    App(Box<Expr>, Box<Expr>),
-    Case(Box<Expr>, Vec<Rule>),
-    Const(Const),
-    Constraint(Box<Expr>, Box<Type>),
-    FlatApp(Vec<Expr>),
-    Fn(Vec<Rule>),
-    Handle(Box<Expr>, Vec<Rule>),
-    If(Box<Expr>, Box<Expr>, Box<Expr>),
-    Let(Vec<Decl>, Box<Expr>),
-    List(Vec<Expr>),
-    Orelse(Box<Expr>, Box<Expr>),
-    Primitive(Primitive),
-    Raise(Box<Expr>),
-    Record(Vec<Row<Expr>>),
-    Selector(Symbol),
-    Seq(Vec<Expr>),
-    Var(Symbol),
-    While(Box<Expr>, Box<Expr>),
-}
-
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub enum PatKind {
+#[derive(Clone, Debug, PartialEq)]
+pub enum Pattern {
     /// Algebraic datatype constructor, along with binding pattern
-    App(Symbol, Box<Pat>),
-    /// Type ascription
-    Ascribe(Box<Pat>, Box<Type>),
+    App(Symbol, Box<Pattern>),
     /// Constant
-    Const(Const),
-    /// A collection of pat applications, possibly including infix constructors
-    FlatApp(Vec<Pat>),
+    Lit(LitValue),
     /// List pattern [pat1, ... patN]
-    List(Vec<Pat>),
+    //List(Vec<Pat>),
     /// Record pattern { label1, label2 }, and whether it's flexible or not
-    Record(Vec<Row<Pat>>, bool),
-
+    // Record(Vec<Row<Pat>>, bool),
     /// Variable binding
-    Variable(Symbol),
+    Var(Symbol),
     /// Wildcard
     Wild,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub struct FnBinding {
-    pub name: Symbol,
-    pub pats: Vec<Pat>,
-    pub res_ty: Option<Type>,
-    pub expr: Expr,
-    pub span: Span,
-}
-
 /// Rule of a case expression
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Rule {
-    pub pat: Pat,
+    pub pat: Pattern,
     pub expr: Expr,
     pub span: Span,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub struct Row<T> {
-    pub label: Symbol,
-    pub data: T,
-    pub span: Span,
-}
-
-pub type Decl = Spanned<DeclKind>;
-pub type Type = Spanned<TypeKind>;
-pub type Expr = Spanned<ExprKind>;
-pub type Pat = Spanned<PatKind>;
-pub type Variant = Row<Option<Type>>;
-pub type Fun = Spanned<Vec<FnBinding>>;
-
+/*
 /// Interestingly, MLton immediately desugars tuples during parsing, rather than
 /// during elaboration. We do the same
 pub fn make_record(v: Vec<Expr>) -> ExprKind {
@@ -177,3 +140,25 @@ pub fn make_record_pat(v: Vec<Pat>, flex: bool) -> PatKind {
         flex,
     )
 }
+
+
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+pub struct Row<T> {
+    pub label: Symbol,
+    pub data: T,
+    pub span: Span,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum Fixity {
+    Infixl,
+    Infixr,
+    Nonfix,
+}
+
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+pub struct Primitive {
+    pub sym: Symbol,
+    pub ty: Type,
+}
+*/

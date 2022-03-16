@@ -1,69 +1,76 @@
-use logos::{Lexer,Span};
+use std::ptr::NonNull;
+use std::str::FromStr;
 
-use crate::{lexer::*, symbol::SymTable};
+use logos::{Lexer,Span, Source, Logos};
+
+use crate::lexer::*;
+use crate::symbol::{SymTable, Symbol};
+use crate::ast::*;
 
 pub struct Parser<'src> {
-    lexer: Lexer<'src>,
+    lexer: Lexer<'src,Token>,
     table: SymTable<'src>,
-    stack: Vec<(Token,Span)>,
+    // for caching lexed tokens, spans, and slices
+    stack: Vec<(Token,Span,&'src str)>,
+    // since we sometimes backtracks
     index: usize,
 }
 
 impl<'src> Parser<'src> {
-    pub fn new(string: &'src String) -> Parser {
+    pub fn new(input: &'src str) -> Parser {
         Parser { 
-            lexer: Lexer::from_string(string),
+            lexer: Lexer::new(input),
             table: SymTable::with_capacity(256),
-            stack: Vec::new(),
+            stack: vec![(
+                Token::Error,
+                std::ops::Range {start: 0, end: 0 },
+                "???")],
             index: 0,
         }
     }
     pub fn next(&mut self) -> Option<Token> {
+        assert!(self.index <= self.stack.len() - 1);
         self.index += 1;
-
-        if self.index > self.stack.len() {
+        // println!("{} ?= {}",self.index, self.stack.len());
+        if self.index == self.stack.len(){
             if let Some(tok) = self.lexer.next() {
-                self.stack.push((tok,self.lexer.span()));
+                self.stack.push(
+                    (tok, self.lexer.span(), self.lexer.slice())
+                );
+                // println!("new token {:?}", tok);
                 Some(tok)
             } else {
                 None
             }
         } else {
-            let (tok,_) = self.stack[self.index];
+            let (tok,_,_) = self.stack[self.index];
+            // println!("old token {:?}", tok);
             Some(tok)
         }
     }
     pub fn token(&self) -> Token {
-        let (tok,_) = self.stack[self.index];
-        tok
+        let (token,_,_) = self.stack[self.index];
+        token
     }
 
     pub fn span(&self) -> Span {
-
+        let (_,span,_) = &self.stack[self.index];
+        span.clone()
     }
 
-    pub fn read_token(&mut self, token: Token) -> Option<()> {
-        let tok = self.next()?;
-        if tok == token {
-            Some(())
-        } else { None }
+    pub fn slice(&self) -> &'src str{
+        let (_,_,slice) = self.stack[self.index];
+        slice
     }
 
-    pub fn read_ident(&mut self) -> Option<String> {
-        let tok = self.next()?;
-        if let Token::Var(x) = tok {
-            Some(x)
-        } else { None }
-    }
+    /*
+    pub fn parse<T:FromStr>(&self) -> Option<T> {
+        self.slice().parse().ok()
+    } 
+    */
 
-    pub fn read_int(&mut self) -> Option<i64> {
-        let tok = self.next()?;
-        if let Token::Int(x) = tok {
-            Some(x)
-        } else { None }
-    }
-
-    pub fn try_read<T>(&mut self, func: fn(&mut Parser)->Option<T>) -> Option<T> {
+    pub fn try_read<T>(&mut self,
+            func: fn(&mut Parser)->Option<T>) -> Option<T> {
         let record = self.index;
         if let Some(value) = func(self) {
             Some(value)
@@ -73,7 +80,7 @@ impl<'src> Parser<'src> {
         }
     }
 
-    pub fn try_read_many<T>(&mut self,
+    pub fn choices<T>(&mut self,
             funcs: Vec<fn(&mut Parser)->Option<T>>) -> Option<T> {
         let record = self.index;
         for func in funcs.iter() {
@@ -86,7 +93,8 @@ impl<'src> Parser<'src> {
         None
     }
 
-    pub fn try_peek<T>(&mut self,func: fn(&mut Parser)->Option<T>) -> Option<T> {
+    pub fn try_peek<T>(&mut self,
+            func: fn(&mut Parser)->Option<T>) -> Option<T> {
         let record = self.index;
         if let Some(value) = func(self) {
             self.index = record;
@@ -97,70 +105,150 @@ impl<'src> Parser<'src> {
         }
     }
 
-}
-
-
-pub fn read_term(par: &mut Parser) -> Option<TermRef> {
-    par.try_read_many(vec![
-        |p|{ read_const_func(p) },
-        |p|{
-            let value = read_int(p)?;
-            Some(i!(value))
-        },
-        |p|{ read_var(p) },
-        |p|{ read_lam(p) },
-        |p|{ read_app(p) }
-    ])
-}
-pub fn read_var(par: &mut Parser) -> Option<TermRef> {
-    par.try_read(|p|{
-        let string = p.read_regex(&*SYMB_RE)?;
-        Some(var!(Symb::new(string)))
-    })
-}
-pub fn read_lam(par: &mut Parser) -> Option<TermRef> {
-    par.try_read(|p|{
-        p.read_string("\\")?;
-        p.skip_space();
-        let x = read_symb(p)?;
-        p.skip_space();
-        p.read_string(".")?;
-        p.skip_space();
-        let t = read_app_list(p)?;
-        Some(lam!(x,t))
-    })
-}
-pub fn read_app(par: &mut Parser) -> Option<TermRef> {
-    par.try_read(|p|{
-        p.read_string("(")?;
-        p.skip_space();
-        let t = read_app_list(p)?;
-        p.skip_space();
-        p.read_string(")")?;
-        Some(t)
-    })
-}
-
-pub fn read_app_list(par: &mut Parser) -> Option<TermRef> {
-    par.try_read(|p|{
-        let mut t1 = read_term(p)?;
-        p.skip_space();
-        loop {
-            if let Some(t2) = read_term(p) {
-                t1 = app!(t1,t2);
-                p.skip_space();
-            } else if let Some(()) = p.read_string(";") {
-                p.skip_space();
-                let list = read_app_list(p)?;
-                t1 = app!(t1,list);
-                p.skip_space();
-            } else {
-                break;
-            }
+    pub fn many<T>(&mut self,
+            func: fn(&mut Parser)->Option<T>) -> Vec<T> {
+        let mut vec = Vec::new();
+        while let Some(res) = self.try_read(func) {
+            vec.push(res);
         }
-        Some(t1)
-    })
+        vec
+    }
+
+    pub fn many1<T>(&mut self,
+            func: fn(&mut Parser)->Option<T>) -> Option<Vec<T>> {
+        let mut vec = Vec::new();
+        vec.push(self.try_read(func)?); // at least one element
+        while let Some(res) = self.try_read(func) {
+            vec.push(res);
+        }
+        Some(vec)
+    }
+
+    pub fn with_paren<T>(&mut self,
+            func: fn(&mut Parser)->Option<T>) -> Option<T> {
+        self.read_token(Token::LParen)?;
+        let res = func(self)?;
+        self.read_token(Token::RParen)?;
+        Some(res)
+    }
+
+
+    pub fn read_token(&mut self, token: Token) -> Option<()> {
+        let tok = self.next()?;
+        if tok == token {
+            println!("{:?} == {:?}", tok, token);
+            Some(())
+        } else {
+            println!("{:?} != {:?}", tok, token);
+            None
+        }
+    }
+
+    pub fn read_eof(&mut self) -> Option<()> {
+        if self.next().is_none() {
+            Some(())
+        } else { None }
+    }
+
+    /*
+    pub fn check_token(&self, token: Token) -> Option<()> {
+        if self.token() == token {
+            Some(())
+        } else { None }
+    }
+    */
+
+    pub fn parse_ident(&mut self) -> Option<Symbol> {
+        assert_eq!(self.token(), Token::Var);
+        Some(self.table.newsym(self.slice()))
+    }
+
+    pub fn read_ident(&mut self) -> Option<Symbol> {
+        println!("ident!");
+        self.read_token(Token::Var)?;
+        self.parse_ident()
+    }
+
+    pub fn parse_int(&self) -> Option<i64> {
+        assert_eq!(self.token(), Token::Int);
+        Some(self.slice().parse().unwrap())
+    }
+
+    pub fn parse_real(&self) -> Option<f64> {
+        assert_eq!(self.token(), Token::Real);
+        Some(self.slice().parse().unwrap())
+    }
+
+    pub fn parse_bool(&self) -> Option<bool> {
+        assert_eq!(self.token(), Token::Bool);
+        if self.slice() == "true" {
+            Some(true)
+        } else if self.slice() == "false" {
+            Some(false)
+        } else {
+            panic!("wrong input!");
+        }
+    }
+
+    
+
+    pub fn read_lit_value(&mut self) -> Option<LitValue> {
+        match self.next()? {
+            Token::Int => 
+                { self.parse_int().map(|x| LitValue::Int(x)) }
+            Token::Real =>
+                { self.parse_real().map(|x| LitValue::Real(x)) }
+            Token::Bool =>
+                { self.parse_bool().map(|x| LitValue::Bool(x)) }
+            _ => None
+        }
+    }
+
+    pub fn read_lam(&mut self) -> Option<Expr> {
+        println!("lam!");
+        self.read_token(Token::Fn)?;
+        println!("pass!");
+        let args= self.many1(|p| p.read_ident())?;
+        self.read_token(Token::EArrow)?;
+        let body = self.read_app()?;
+        Some(args.iter().fold(body,
+            |e ,x| Expr::Lam(*x,Box::new(e))))
+    }
+
+    pub fn read_app(&mut self) -> Option<Expr> {
+        let exprs= self.many1(|p| p.read_expr())?;
+        Some(exprs.into_iter().reduce(
+            |e1,e2| Expr::App(Box::new(e1),Box::new(e2))).unwrap())        
+    }
+    
+    pub fn read_expr(&mut self) -> Option<Expr> {
+        println!("expr!");
+        self.choices(vec![
+            { |p| p.read_lit_value().map(|x| Expr::Lit(x)) },
+            { |p| p.read_ident().map(|x| Expr::Var(x)) },
+            { |p| p.read_lam() },
+            { |p| p.with_paren(|p2| p2.read_app()) },
+        ])
+    }
+
 }
+
+
+#[test]
+pub fn parser_test() {
+    let string = "fn f x => f x";
+
+    let mut par = Parser::new(string);
+
+    let expr = par.read_app();
+
+    println!("{:?}",expr);
+
+
+}
+
+
+/*
 
 pub fn read_const_func(par: &mut Parser) -> Option<TermRef> {
     macro_rules! const_parser {
@@ -179,3 +267,4 @@ pub fn read_path(par: &mut Parser) -> Option<String> {
         Some(string.to_string())
     })
 }
+*/
