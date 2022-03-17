@@ -136,10 +136,10 @@ impl<'src> Parser<'src> {
     pub fn read_token(&mut self, token: Token) -> Option<()> {
         let tok = self.next()?;
         if tok == token {
-            println!("{:?} == {:?}", tok, token);
+            //println!("{:?} == {:?}", tok, token);
             Some(())
         } else {
-            println!("{:?} != {:?}", tok, token);
+            //println!("{:?} != {:?}", tok, token);
             None
         }
     }
@@ -204,6 +204,12 @@ impl<'src> Parser<'src> {
         }
     }
 
+    pub fn read_var(&mut self) -> Option<Expr> {
+        self.read_token(Token::Var);
+        let ident = self.parse_ident()?;
+        Some(Expr::Var(ident))
+    }
+
     pub fn read_lam(&mut self) -> Option<Expr> {
         println!("lam!");
         self.read_token(Token::Fn)?;
@@ -220,12 +226,22 @@ impl<'src> Parser<'src> {
         Some(exprs.into_iter().reduce(
             |e1,e2| Expr::App(Box::new(e1),Box::new(e2))).unwrap())        
     }
+
+    pub fn read_let(&mut self) -> Option<Expr> {
+        self.read_token(Token::Let)?;
+        let decls = self.many1(func)?;
+        self.read_token(Token::In)?;
+
+
+    }
+
+    pub fn read_decl(&mut self) -> Option<DeclKind>
     
     pub fn read_expr(&mut self) -> Option<Expr> {
         println!("expr!");
         self.choices(vec![
             { |p| p.read_lit_value().map(|x| Expr::Lit(x)) },
-            { |p| p.read_ident().map(|x| Expr::Var(x)) },
+            { |p| p.read_var() },
             { |p| p.read_lam() },
             { |p| p.with_paren(|p2| p2.read_app()) },
         ])
