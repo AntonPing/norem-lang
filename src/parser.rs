@@ -64,10 +64,6 @@ impl<'src> Parser<'src> {
         slice
     }
 
-    pub fn parse<T>(&mut self, par: Parse<T>) -> Option<T> {
-        par(self)
-    }
-
     /*
     pub fn parse<T:FromStr>(&self) -> Option<T> {
         self.slice().parse().ok()
@@ -131,36 +127,11 @@ impl<'src> Parser<'src> {
 
     pub fn with_paren<T>(&mut self,
             func: fn(&mut Parser)->Option<T>) -> Option<T> {
-        self.parse_token(Token::LParen)?;
+        self.read_token(Token::LParen)?;
         let res = func(self)?;
-        self.parse_token(Token::RParen)?;
+        self.read_token(Token::RParen)?;
         Some(res)
     }
-
-    pub fn parse_token(&mut self, token: Token) -> Option<()> {
-        let tok = self.next()?;
-        if tok == token {
-            //println!("{:?} == {:?}", tok, token);
-            Some(())
-        } else {
-            //println!("{:?} != {:?}", tok, token);
-            None
-        }
-    }
-
-    pub fn parse_eof(&mut self) -> Option<()> {
-        if self.next().is_none() {
-            Some(())
-        } else { None }
-    }
-
-    /*
-    pub fn check_token(&self, token: Token) -> Option<()> {
-        if self.token() == token {
-            Some(())
-        } else { None }
-    }
-    */
 
     pub fn parse_ident(&mut self) -> Symbol {
         assert_eq!(self.token(), Token::Var);
@@ -187,93 +158,107 @@ impl<'src> Parser<'src> {
             panic!("wrong input!");
         }
     }
-}
 
-pub fn read_ident(p: &mut Parser) -> Option<Symbol> {
-    p.parse_token(Token::Var);
-    let ident = p.parse_ident();
-    Some(ident)
-}
+    pub fn read_token(&mut self, token: Token) -> Option<()> {
+        let tok = self.next()?;
+        if tok == token {
+            //println!("{:?} == {:?}", tok, token);
+            Some(())
+        } else {
+            //println!("{:?} != {:?}", tok, token);
+            None
+        }
+    }
 
-pub fn read_lit_value(p: &mut Parser) -> Option<LitValue> {
-    match p.next()? {
-        Token::Int =>  { Some(LitValue::Int(p.parse_int())) }
-        Token::Real => { Some(LitValue::Real(p.parse_real())) }
-        Token::Bool => { Some(LitValue::Bool(p.parse_bool())) }
-        _ => None
+    pub fn read_eof(&mut self) -> Option<()> {
+        if self.next().is_none() {
+            Some(())
+        } else { None }
+    }
+
+    pub fn read_ident(&mut self) -> Option<Symbol> {
+        self.read_token(Token::Var)?;
+        let ident = self.parse_ident();
+        Some(ident)
+    }
+
+    pub fn read_lit_value(&mut self) -> Option<LitValue> {
+        match self.next()? {
+            Token::Int =>  { Some(LitValue::Int(self.parse_int())) }
+            Token::Real => { Some(LitValue::Real(self.parse_real())) }
+            Token::Bool => { Some(LitValue::Bool(self.parse_bool())) }
+            _ => None
+        }
+    }
+
+    pub fn read_var(&mut self) -> Option<Expr> {
+        self.read_token(Token::Var)?;
+        let ident = self.parse_ident();
+        Some(Expr::Var(ident))
+    }
+
+    pub fn read_lam(&mut self) -> Option<Expr> {
+        self.read_token(Token::Fn)?;
+        let args= self.many1(|p| p.read_ident())?;
+        self.read_token(Token::EArrow)?;
+        let body = self.read_app()?;
+        Some(args.iter().fold(body,
+            |e ,x| Expr::Lam(*x,Box::new(e))))
+    }
+
+    pub fn read_app(&mut self) -> Option<Expr> {
+        let exprs = self.many1(|p| p.read_expr())?;
+        Some(exprs.into_iter().reduce(
+            |e1,e2| Expr::App(Box::new(e1),Box::new(e2))).unwrap())        
+    }
+
+    pub fn read_let(&mut self) -> Option<Expr> {
+        self.read_token(Token::Let)?;
+        let decls = self.many1(|p| p.read_decl())?;
+        self.read_token(Token::In)?;
+        let expr = self.read_expr()?;
+        self.read_token(Token::End)?;
+        Some(Expr::Let(decls, Box::new(expr)))
+    }
+
+    pub fn read_expr(&mut self) -> Option<Expr> {
+        self.choices(vec![
+            { |p| p.read_lit_value().map(|x| Expr::Lit(x)) },
+            { |p| p.read_var() },
+            { |p| p.read_lam() },
+            { |p| p.with_paren(|p2| p2.read_app()) },
+        ])
+    }
+
+    pub fn read_decl(&mut self) -> Option<DeclKind> {
+        self.choices(vec![
+            { |p| p.read_val_decl() },
+        ])
+    }
+
+    pub fn read_val_decl(&mut self) -> Option<DeclKind> {
+        let first = self.span();
+        self.read_token(Token::Val)?;
+        let name = self.read_ident()?;
+        let args = self.many(|p| p.read_ident());
+        self.read_token(Token::Equal)?;
+        let body = self.read_expr()?;
+        self.try_read(|p| p.choices(vec![
+            |p| p.read_token(Token::Val),
+            |p| p.read_token(Token::Data),
+            |p| p.read_token(Token::Type),
+            |p| p.read_token(Token::In),
+        ]))?;
+        let last = self.span();
+        Some(DeclKind::Val(ValDecl{
+            name: name,
+            args: args,
+            body: body,
+            span: Range { start: first.start, end: last.end }
+        }))
     }
 }
 
-pub fn read_var(p: &mut Parser) -> Option<Expr> {
-    p.parse_token(Token::Var);
-    let ident = p.parse_ident();
-    Some(Expr::Var(ident))
-}
-
-pub fn read_lam(p: &mut Parser) -> Option<Expr> {
-    p.parse_token(Token::Fn)?;
-    let args= p.many1(read_ident)?;
-    p.parse_token(Token::EArrow)?;
-    let body = read_app(p)?;
-    Some(args.iter().fold(body,
-        |e ,x| Expr::Lam(*x,Box::new(e))))
-}
-
-pub fn read_app(p: &mut Parser) -> Option<Expr> {
-    let exprs= p.many1(read_expr)?;
-    Some(exprs.into_iter().reduce(
-        |e1,e2| Expr::App(Box::new(e1),Box::new(e2))).unwrap())        
-}
-
-pub fn read_let(p: &mut Parser) -> Option<Expr> {
-    p.parse_token(Token::Let)?;
-    let decls = p.many1(read_decl)?;
-    p.parse_token(Token::In)?;
-
-
-}
-
-pub fn read_decl(p: &mut Parser) -> Option<DeclKind> {
-    
-
-}
-
-pub fn read_val_decl(p: &mut Parser) -> Option<DeclKind> {
-    let first = p.span();
-
-    p.parse_token(Token::Val)?;
-    let name = read_ident(p)?;
-    let args = p.many(read_ident);
-    p.parse_token(Token::Equal)?;
-    let body = read_expr(p)?;
-    p.try_read(|p| p.choices(vec![
-        |p| p.parse_token(Token::Val),
-        |p| p.parse_token(Token::Data),
-        |p| p.parse_token(Token::Type),
-        |p| p.parse_token(Token::In),
-    ]))?;
-
-    let last = p.span();
-
-    Some(DeclKind::Val(ValDecl{
-        name: name,
-        args: args,
-        body: body,
-        span: Range { start: first.start, end: last.end }
-    }))
-}
-
-
-
-pub fn read_expr(p: &mut Parser) -> Option<Expr> {
-    println!("expr!");
-    self.choices(vec![
-        { |p| p.read_lit_value().map(|x| Expr::Lit(x)) },
-        { |p| p.read_var() },
-        { |p| p.read_lam() },
-        { |p| p.with_paren(|p2| p2.read_app()) },
-    ])
-}
 
 
 #[test]

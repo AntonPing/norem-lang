@@ -1,7 +1,6 @@
 use logos::Span;
 use crate::symbol::*;
 
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Lit(LitValue),
