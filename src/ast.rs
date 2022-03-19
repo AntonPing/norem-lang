@@ -44,6 +44,14 @@ pub struct Variant {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct ValDecl {
+    pub name: Symbol,
+    pub args: Vec<Symbol>,
+    pub body: Expr,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct DataDecl {
     pub name: Symbol,
     pub args: Vec<Symbol>,
@@ -60,18 +68,10 @@ pub struct TypeDecl {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ValDecl {
-    pub name: Symbol,
-    pub args: Vec<Symbol>,
-    pub body: Box<Expr>,
-    pub span: Span,
-}
-
-#[derive(Clone, Debug, PartialEq)]
 pub enum DeclKind {
+    Val(ValDecl),
     Data(DataDecl),
     Type(TypeDecl),
-    Value(ValDecl),
 }
 
 #[derive(Clone, Debug, PartialEq)]

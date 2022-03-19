@@ -84,6 +84,15 @@ pub enum Token {
     #[token("end")]
     End,
 
+    #[token("val")]
+    Val,
+
+    #[token("data")]
+    Data,
+
+    #[token("type")]
+    Type,
+
     #[token("fn")]
     Fn,
     
