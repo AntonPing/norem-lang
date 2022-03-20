@@ -46,6 +46,10 @@ impl<'src> SymTable<'src> {
         let idx = self.sym_map.get(s)?;
         Some(Symbol::Var(*idx))
     }
+
+    pub fn get_str(&self, idx: usize) -> Option<&'src str> {
+        self.sym_vec.get(idx).map(|s|*s)
+    }
 }
 
 impl fmt::Debug for Symbol {

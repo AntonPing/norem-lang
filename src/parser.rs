@@ -15,7 +15,7 @@ pub struct Parser<'src> {
     index: usize,
 }
 
-type Parse<T> = fn(&mut Parser) -> Option<T>;
+type Parsing<T> = fn(&mut Parser) -> Option<T>;
 
 impl<'src> Parser<'src> {
     pub fn new(input: &'src str) -> Parser {
@@ -29,6 +29,8 @@ impl<'src> Parser<'src> {
             index: 0,
         }
     }
+    
+    
     pub fn next(&mut self) -> Option<Token> {
         assert!(self.index <= self.stack.len() - 1);
         self.index += 1;
@@ -49,6 +51,7 @@ impl<'src> Parser<'src> {
             Some(tok)
         }
     }
+
     pub fn token(&self) -> Token {
         let (token,_,_) = self.stack[self.index];
         token
@@ -59,19 +62,12 @@ impl<'src> Parser<'src> {
         span.clone()
     }
 
-    pub fn slice(&self) -> &'src str{
+    pub fn slice(&self) -> &'src str {
         let (_,_,slice) = self.stack[self.index];
         slice
     }
 
-    /*
-    pub fn parse<T:FromStr>(&self) -> Option<T> {
-        self.slice().parse().ok()
-    } 
-    */
-
-    pub fn try_read<T>(&mut self,
-            func: fn(&mut Parser)->Option<T>) -> Option<T> {
+    pub fn try_read<T>(&mut self, func: Parsing<T>) -> Option<T> {
         let record = self.index;
         if let Some(value) = func(self) {
             Some(value)
@@ -81,8 +77,18 @@ impl<'src> Parser<'src> {
         }
     }
 
-    pub fn choices<T>(&mut self,
-            funcs: Vec<fn(&mut Parser)->Option<T>>) -> Option<T> {
+    pub fn try_peek<T>(&mut self, func: Parsing<T>) -> Option<T> {
+        let record = self.index;
+        if let Some(value) = func(self) {
+            self.index = record;
+            return Some(value);
+        } else {
+            self.index = record;
+            return None;
+        }
+    }
+
+    pub fn choices<T>(&mut self, funcs: Vec<Parsing<T>>) -> Option<T> {
         let record = self.index;
         for func in funcs.iter() {
             if let Some(value) = func(self) {
@@ -94,20 +100,7 @@ impl<'src> Parser<'src> {
         None
     }
 
-    pub fn try_peek<T>(&mut self,
-            func: fn(&mut Parser)->Option<T>) -> Option<T> {
-        let record = self.index;
-        if let Some(value) = func(self) {
-            self.index = record;
-            return Some(value);
-        } else {
-            self.index = record;
-            return None;
-        }
-    }
-
-    pub fn many<T>(&mut self,
-            func: fn(&mut Parser)->Option<T>) -> Vec<T> {
+    pub fn many<T>(&mut self, func: Parsing<T>) -> Vec<T> {
         let mut vec = Vec::new();
         while let Some(res) = self.try_read(func) {
             vec.push(res);
@@ -115,12 +108,31 @@ impl<'src> Parser<'src> {
         vec
     }
 
-    pub fn many1<T>(&mut self,
-            func: fn(&mut Parser)->Option<T>) -> Option<Vec<T>> {
+    pub fn many1<T>(&mut self, func: Parsing<T>) -> Option<Vec<T>> {
         let mut vec = Vec::new();
         vec.push(self.try_read(func)?); // at least one element
         while let Some(res) = self.try_read(func) {
             vec.push(res);
+        }
+        Some(vec)
+    }
+
+    pub fn sep_by<T,D>(&mut self, func: Parsing<T>, delim: Parsing<D>)
+            -> Vec<T> {
+        self.sep_by1(func, delim).unwrap_or(Vec::new())
+    }
+
+    pub fn sep_by1<T,D>(&mut self, func: Parsing<T>, delim: Parsing<D>)
+            -> Option<Vec<T>> {
+        let mut vec = Vec::new();
+        vec.push(self.try_read(func)?); // at least one element
+        loop {
+            let record = self.index;
+            if let Some(_) = delim(self) {
+                if let Some(res) = func(self) {
+                    vec.push(res);
+                } else { self.index = record; break; }
+            } else { self.index = record; break; }
         }
         Some(vec)
     }
@@ -233,7 +245,19 @@ impl<'src> Parser<'src> {
     pub fn read_decl(&mut self) -> Option<DeclKind> {
         self.choices(vec![
             { |p| p.read_val_decl() },
+            { |p| p.read_data_decl() },
+            { |p| p.read_type_decl() },
         ])
+    }
+
+    pub fn peek_decl_end(&mut self) -> Option<()> {
+        self.try_peek(|p| p.choices(vec![
+            { |p| p.read_token(Token::Val) },
+            { |p| p.read_token(Token::Data) },
+            { |p| p.read_token(Token::Type) },
+            { |p| p.read_token(Token::In) },
+        ]))?;
+        Some(())
     }
 
     pub fn read_val_decl(&mut self) -> Option<DeclKind> {
@@ -243,12 +267,7 @@ impl<'src> Parser<'src> {
         let args = self.many(|p| p.read_ident());
         self.read_token(Token::Equal)?;
         let body = self.read_expr()?;
-        self.try_read(|p| p.choices(vec![
-            |p| p.read_token(Token::Val),
-            |p| p.read_token(Token::Data),
-            |p| p.read_token(Token::Type),
-            |p| p.read_token(Token::In),
-        ]))?;
+        self.peek_decl_end()?;
         let last = self.span();
         Some(DeclKind::Val(ValDecl{
             name: name,
@@ -257,6 +276,61 @@ impl<'src> Parser<'src> {
             span: Range { start: first.start, end: last.end }
         }))
     }
+
+    pub fn read_data_decl(&mut self) -> Option<DeclKind> {
+        let first = self.span();
+        self.read_token(Token::Data)?;
+        let name = self.read_ident()?;
+        let args = self.many(|p| p.read_ident());
+        self.read_token(Token::Equal)?;
+        let branches = self.sep_by1(
+            |p| p.read_varient(),
+            |p| p.read_token(Token::Bar))?;
+        self.peek_decl_end()?;
+        let last = self.span();
+        Some(DeclKind::Data(DataDecl{
+            name: name,
+            args: args,
+            branches: branches,
+            span: Range { start: first.start, end: last.end }
+        }))
+    }
+
+    pub fn read_type_decl(&mut self) -> Option<DeclKind> {
+        let first = self.span();
+        self.read_token(Token::Type)?;
+        let name = self.read_ident()?;
+        let args = self.many(|p| p.read_ident());
+        self.read_token(Token::Equal)?;
+        let typ = self.read_type()?;
+        self.peek_decl_end()?;
+        let last = self.span();
+        Some(DeclKind::Type(TypeDecl{
+            name: name,
+            args: args,
+            typ: typ,
+            span: Range { start: first.start, end: last.end }
+        }))
+    }
+
+    pub fn read_varient(&mut self) -> Option<Variant> {
+        let constr = self.read_ident()?;
+        let args = self.many(|p| p.read_type());
+        Some(Variant{
+            constr: constr,
+            args: args,
+        })
+    }
+
+
+    pub fn read_type(&mut self) -> Option<Type> {
+        None
+    }
+
+    pub fn read_lit_type(&mut self) -> Option<Type> {
+        None
+    }
+
 }
 
 

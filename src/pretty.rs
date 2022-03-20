@@ -112,7 +112,7 @@ pub trait Print {
 }
 
 impl<T: fmt::Display> Print for T {
-    fn print<'a>(&self, pp: &'a mut PrettyPrinter) {
+    fn print(&self, pp: &mut PrettyPrinter) {
         pp.text(self.to_string())
     }
 }
@@ -127,10 +127,11 @@ impl<'src> fmt::Display for PrettyPrinter<'src> {
 */
 
 impl Print for Symbol {
-    fn print<'a>(&self, pp: &'a mut PrettyPrinter){
-        match self {
+    fn print(&self, pp: &mut PrettyPrinter){
+        match *self {
             Symbol::Var(n) => {
-                pp.text(n.to_string());
+                let string = pp.table.get_str(n).unwrap();
+                pp.text(string);
             },
             Symbol::Gen(n) => {
                 pp.text(format!("#{}", n));
@@ -150,8 +151,34 @@ impl Print for LitValue {
     }
 }
 
-
-
+impl Print for Expr {
+    fn print(&self, pp: &mut PrettyPrinter) {
+        match self {
+            Expr::Lit(lit) => {
+                lit.print(pp);
+            }
+            Expr::Var(x) => {
+                x.print(pp);
+            }
+            Expr::Lam(x, e) => {
+                pp.text("fn ");
+                x.print(pp);
+                pp.text(" => ");
+                e.print(pp);
+            }
+            Expr::App(e1, e2) => {
+                pp.text("(");
+                e1.print(pp);
+                pp.text(" => ");
+                e2.print(pp);
+                pp.text(")");
+            }
+            _ => {
+                pp.text("???");
+            }
+        }
+    }
+}
 
 
 #[test]

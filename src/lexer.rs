@@ -75,6 +75,9 @@ pub enum Token {
     #[token(";")]
     Semicolon,
 
+    #[token("|")]
+    Bar,
+
     #[token("let")]
     Let,
     
