@@ -105,6 +105,10 @@ impl<'src> PrettyPrinter<'src> {
     pub fn text<S: AsRef<str>>(&mut self, s: S) {
         self.commands.push_back(Command::Text(s.as_ref().into()));
     }
+
+    pub fn print<T: Print>(&mut self, t: T) {
+        t.print(self);
+    }
 }
 
 pub trait Print {

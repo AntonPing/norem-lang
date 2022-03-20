@@ -29,7 +29,10 @@ impl<'src> Parser<'src> {
             index: 0,
         }
     }
-    
+
+    pub fn table(&self) -> SymTable<'src> {
+        self.table
+    }
     
     pub fn next(&mut self) -> Option<Token> {
         assert!(self.index <= self.stack.len() - 1);
