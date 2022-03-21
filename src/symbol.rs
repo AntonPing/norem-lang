@@ -17,6 +17,10 @@ pub struct SymTable<'src> {
 }
 
 impl<'src> SymTable<'src> {
+    pub fn new() -> SymTable<'src> {
+        SymTable::with_capacity(256)
+    }
+    
     pub fn with_capacity(n: usize) -> SymTable<'src> {
         SymTable {
             sym_map: HashMap::with_capacity(n),

@@ -8,6 +8,7 @@ use rustyline::validate::{
 };
 use rustyline_derive::{Completer, Helper, Highlighter, Hinter};
 
+use crate::symbol::{self, SymTable};
 use crate::parser;
 use crate::pretty::{self, Print};
 
@@ -39,7 +40,7 @@ pub fn run_repl() {
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
                 let input = String::from(line);
-                command_line(input);
+                command_line(input.as_str());
             },
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
@@ -59,9 +60,10 @@ pub fn run_repl() {
     
 }
 
-fn command_line(input: String) {
-    let input = input.trim().to_string();
-    let mut p = parser::Parser::new(input.as_str());
+fn command_line<'src>(input: &'src str) {
+    let mut table: SymTable<'src> = symbol::SymTable::new();
+    let mut p = parser::Parser::new(
+        input, &mut table);
     let mut pp = pretty::PrettyPrinter::new(120,p.table());
     if let Some(expr) = p.read_app() {
         expr.print(&mut pp);

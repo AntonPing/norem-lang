@@ -5,13 +5,18 @@ use std::collections::VecDeque;
 use crate::symbol::*;
 use crate::ast::*;
 
-//#[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub struct PrettyPrinter<'src> {
+pub trait Pretty<S> {
+    fn print(&self, state: &mut S, f: &mut fmt::Formatter) -> fmt::Result;
+}
+
+type Printer<T,S> = fn(&T,&mut S,&mut fmt::Formatter) -> fmt::Result;
+
+pub struct PrintState<'src> {
     indent: usize,
+    indent_stack: Vec<usize>,
     width: usize,
     max_width: usize,
     table: SymTable<'src>,
-    commands: VecDeque<Command>,
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
@@ -22,6 +27,82 @@ enum Command {
     Unwrap,
     Text(String),
     Line,
+}
+
+impl<'src> Pretty<PrintState<'src>> for Command {
+    fn print(&self, state: &mut PrintState<'src>,
+        f: &mut fmt::Formatter) -> fmt::Result {
+       
+        match self {
+            Command::Indent(w) => {
+                state.indent += w;
+            }
+            Command::Dedent(w) => {
+                state.indent -= w;
+            }
+            Command::Wrap(w) => {
+                {}
+            }
+            Command::Unwrap => {
+                {}
+            }
+            Command::Line => {
+                write!(f, "{}", '\n')?;
+                for _ in 0..state.indent {
+                    write!(f, "{}", ' ')?;
+                }
+            }
+            Command::Text(s) => {
+                state.width += s.len();
+                if state.width  >= state.max_width {
+                    Command::Line.print(state,f)?;
+                    state.width = state.indent + s.len();
+                }
+                write!(f, "{}", s)?;
+            }
+        }            
+        Ok(())
+    }
+}
+
+#[macro_export]
+macro_rules! nested {
+    ( $( $x:expr ),* ) => {
+        {
+            let mut temp_vec = Vec::new();
+            $(
+                temp_vec.push($x);
+            )*
+            temp_vec
+        }
+    };
+}
+
+
+pub fn nested<'src, O: Pretty<PrintState<'src>>>
+    (p: Printer<O,PrintState<'src>>) -> fmt::Result {
+        
+    
+
+    
+            |o,s,f| {
+        let old_indent = s.indent;
+        s.indent_stack.push(old_indent);
+        s.ident = old_indent + 4;
+        obj.print(state, f);
+
+
+    }
+}
+
+/*
+//#[derive(Clone, Debug, PartialEq, PartialOrd)]
+pub struct PrettyPrinter<'src> {
+    indent: usize,
+    width: usize,
+    max_width: usize,
+    table: SymTable<'src>,
+    commands: VecDeque<Command>,
 }
 
 impl<'src> PrettyPrinter<'src> {
@@ -207,3 +288,4 @@ pub fn test() {
     });
     println!("{}",pp.render());
 }
+*/

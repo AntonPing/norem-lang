@@ -2,13 +2,13 @@ use std::ops::Range;
 
 use logos::{Lexer,Span, Source, Logos};
 
-use crate::lexer::*;
+use crate::{lexer::*, symbol};
 use crate::symbol::{SymTable, Symbol};
 use crate::ast::*;
 
 pub struct Parser<'src> {
     lexer: Lexer<'src,Token>,
-    table: SymTable<'src>,
+    table: &'src mut SymTable<'src>,
     // for caching lexed tokens, spans, and slices
     stack: Vec<(Token,Span,&'src str)>,
     // since we sometimes backtracks
@@ -18,10 +18,10 @@ pub struct Parser<'src> {
 type Parsing<T> = fn(&mut Parser) -> Option<T>;
 
 impl<'src> Parser<'src> {
-    pub fn new(input: &'src str) -> Parser {
+    pub fn new(input: &'src str, table: &'src mut SymTable<'src>) -> Parser<'src> {
         Parser { 
             lexer: Lexer::new(input),
-            table: SymTable::with_capacity(256),
+            table: table,
             stack: vec![(
                 Token::Error,
                 std::ops::Range {start: 0, end: 0 },
@@ -30,10 +30,6 @@ impl<'src> Parser<'src> {
         }
     }
 
-    pub fn table(&self) -> SymTable<'src> {
-        self.table
-    }
-    
     pub fn next(&mut self) -> Option<Token> {
         assert!(self.index <= self.stack.len() - 1);
         self.index += 1;
@@ -341,8 +337,8 @@ impl<'src> Parser<'src> {
 #[test]
 pub fn parser_test() {
     let string = "fn f x => f x";
-
-    let mut par = Parser::new(string);
+    let mut table = symbol::SymTable::new();
+    let mut par = Parser::new(string,&mut table);
 
     let expr = par.read_app();
 
