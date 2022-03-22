@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::ops::Range;
+use std::rc::Rc;
 
 use logos::{Lexer,Span, Source, Logos};
 
@@ -8,7 +10,7 @@ use crate::ast::*;
 
 pub struct Parser<'src> {
     lexer: Lexer<'src,Token>,
-    table: &'src mut SymTable<'src>,
+    table: Rc<RefCell<SymTable<'src>>>,
     // for caching lexed tokens, spans, and slices
     stack: Vec<(Token,Span,&'src str)>,
     // since we sometimes backtracks
@@ -18,7 +20,10 @@ pub struct Parser<'src> {
 type Parsing<T> = fn(&mut Parser) -> Option<T>;
 
 impl<'src> Parser<'src> {
-    pub fn new(input: &'src str, table: &'src mut SymTable<'src>) -> Parser<'src> {
+    pub fn new(
+        input: &'src str,
+        table: Rc<RefCell<SymTable<'src>>>
+    ) -> Parser<'src> {
         Parser { 
             lexer: Lexer::new(input),
             table: table,
@@ -146,7 +151,7 @@ impl<'src> Parser<'src> {
 
     pub fn parse_ident(&mut self) -> Symbol {
         assert_eq!(self.token(), Token::Var);
-        self.table.newsym(self.slice())
+        self.table.borrow_mut().newsym(self.slice())
     }
 
     pub fn parse_int(&self) -> i64 {
@@ -268,6 +273,7 @@ impl<'src> Parser<'src> {
         let body = self.read_expr()?;
         self.peek_decl_end()?;
         let last = self.span();
+        let span = Range { start: first.start, end: last.end };
         Some(DeclKind::Val(ValDecl{
             name: name,
             args: args,
@@ -287,12 +293,8 @@ impl<'src> Parser<'src> {
             |p| p.read_token(Token::Bar))?;
         self.peek_decl_end()?;
         let last = self.span();
-        Some(DeclKind::Data(DataDecl{
-            name: name,
-            args: args,
-            branches: branches,
-            span: Range { start: first.start, end: last.end }
-        }))
+        let span = Range { start: first.start, end: last.end };
+        Some(DeclKind::Data(DataDecl{ name, args, branches, span }))
     }
 
     pub fn read_type_decl(&mut self) -> Option<DeclKind> {
@@ -304,21 +306,14 @@ impl<'src> Parser<'src> {
         let typ = self.read_type()?;
         self.peek_decl_end()?;
         let last = self.span();
-        Some(DeclKind::Type(TypeDecl{
-            name: name,
-            args: args,
-            typ: typ,
-            span: Range { start: first.start, end: last.end }
-        }))
+        let span = Range { start: first.start, end: last.end };
+        Some(DeclKind::Type(TypeDecl{ name, args, typ, span }))
     }
 
     pub fn read_varient(&mut self) -> Option<Variant> {
         let constr = self.read_ident()?;
         let args = self.many(|p| p.read_type());
-        Some(Variant{
-            constr: constr,
-            args: args,
-        })
+        Some(Variant{ constr, args })
     }
 
 
@@ -337,8 +332,8 @@ impl<'src> Parser<'src> {
 #[test]
 pub fn parser_test() {
     let string = "fn f x => f x";
-    let mut table = symbol::SymTable::new();
-    let mut par = Parser::new(string,&mut table);
+    let mut table = Rc::new(RefCell::new(symbol::SymTable::new()));
+    let mut par = Parser::new(string,table);
 
     let expr = par.read_app();
 

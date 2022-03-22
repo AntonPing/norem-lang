@@ -1,15 +1,18 @@
-use std::fmt;
+use std::cell::RefCell;
+use std::fmt::{self, Formatter};
 use std::io::{self, Write};
 use std::collections::VecDeque;
+use std::rc::Rc;
 
 use crate::symbol::*;
 use crate::ast::*;
 
+/*
 pub trait Pretty<S> {
-    fn print(&self, state: &mut S, f: &mut fmt::Formatter) -> fmt::Result;
+    fn print(&self, f: &mut fmt::Formatter, state: &mut S) -> fmt::Result;
 }
 
-type Printer<T,S> = fn(&T,&mut S,&mut fmt::Formatter) -> fmt::Result;
+//type Printer<T,S> = fn(&T,&mut S,&mut fmt::Formatter) -> fmt::Result;
 
 pub struct PrintState<'src> {
     indent: usize,
@@ -19,19 +22,10 @@ pub struct PrintState<'src> {
     table: SymTable<'src>,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-enum Command {
-    Indent(usize),
-    Dedent(usize),
-    Wrap(usize),
-    Unwrap,
-    Text(String),
-    Line,
-}
 
 impl<'src> Pretty<PrintState<'src>> for Command {
-    fn print(&self, state: &mut PrintState<'src>,
-        f: &mut fmt::Formatter) -> fmt::Result {
+    fn print(&self, f: &mut fmt::Formatter,
+        state: &mut PrintState<'src>) -> fmt::Result {
        
         match self {
             Command::Indent(w) => {
@@ -65,48 +59,75 @@ impl<'src> Pretty<PrintState<'src>> for Command {
     }
 }
 
+
+pub fn pretty_print<S>(f:&mut fmt::Formatter, s: &mut S,
+    p: &dyn Pretty<S>) -> fmt::Result {
+
+    p.print(f, s)?;
+    Ok(())
+}
+
+
+pub fn pretty_print<S>(f:&mut fmt::Formatter, s: &mut S,
+    ps: Vec<&dyn Pretty<S>>) -> fmt::Result {
+
+    for p in ps {
+        p.print(f, s)?;
+    }
+    Ok(())
+}
+
+pub fn nested<S>(f:&mut fmt::Formatter, s: &mut S,
+    ps: Vec<&dyn Pretty<S>>) -> fmt::Result {
+
+    
+
+    for p in ps {
+        p.print(f, s)?;
+    }
+    Ok(())
+}
+
 #[macro_export]
-macro_rules! nested {
-    ( $( $x:expr ),* ) => {
+macro_rules! pretty_print {
+    ( $f:expr, $s:expr, $( $p:expr ),* ) => {
         {
-            let mut temp_vec = Vec::new();
-            $(
-                temp_vec.push($x);
-            )*
-            temp_vec
+            || {
+                $(
+                    p.print(f,s)?;
+                )*
+            } ()
         }
     };
 }
 
+*/
 
-pub fn nested<'src, O: Pretty<PrintState<'src>>>
-    (p: Printer<O,PrintState<'src>>) -> fmt::Result {
-        
-    
-
-    
-            |o,s,f| {
-        let old_indent = s.indent;
-        s.indent_stack.push(old_indent);
-        s.ident = old_indent + 4;
-        obj.print(state, f);
-
-
-    }
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+enum Command {
+    Indent(usize),
+    Dedent(usize),
+    Wrap(usize),
+    Unwrap,
+    Text(String),
+    Line,
 }
 
-/*
 //#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct PrettyPrinter<'src> {
     indent: usize,
     width: usize,
     max_width: usize,
-    table: SymTable<'src>,
+    table: Rc<RefCell<SymTable<'src>>>,
     commands: VecDeque<Command>,
 }
 
 impl<'src> PrettyPrinter<'src> {
-    pub fn new(max: usize, table: SymTable<'src>) -> PrettyPrinter<'src> {
+    pub fn new(
+        max: usize,
+        table: Rc<RefCell<SymTable<'src>>>
+    ) -> PrettyPrinter<'src> {
+
         PrettyPrinter {
             indent: 0,
             width: 0,
@@ -152,7 +173,7 @@ impl<'src> PrettyPrinter<'src> {
                         self.newline(f)?;
                         self.width = self.indent + s.len();
                     }
-                    write!(f, "{}", s);
+                    write!(f, "{}", s)?;
                 }
             }
         }
@@ -165,30 +186,35 @@ impl<'src> PrettyPrinter<'src> {
         res
     }
 
-    pub fn wrapped<F>(&mut self, width: usize, func: F)
-    where F: Fn(&mut PrettyPrinter<'src>) {
+    pub fn wrapped<F>(&mut self, width: usize, func: F) -> &mut Self
+    where F: for<'a> Fn(&'a mut PrettyPrinter<'src>) -> &'a mut PrettyPrinter<'src> {
         self.commands.push_back(Command::Wrap(width));
         func(self);
         self.commands.push_back(Command::Unwrap);
+        self
     }
 
-    pub fn nested<F>(&mut self, width: usize, func: F)
-    where F: Fn(&mut PrettyPrinter<'src>) {
+    pub fn nested<F>(&mut self, width: usize, func: F) -> &mut Self
+    where F: for<'a> Fn(&'a mut PrettyPrinter<'src>) -> &'a mut PrettyPrinter<'src> {
         self.commands.push_back(Command::Indent(width));
         func(self);
         self.commands.push_back(Command::Dedent(width));
+        self
     }
 
-    pub fn line(&mut self) {
+    pub fn line(&mut self) -> &mut Self {
         self.commands.push_back(Command::Line);
+        self
     }
 
-    pub fn text<S: AsRef<str>>(&mut self, s: S) {
+    pub fn text<S: AsRef<str>>(&mut self, s: S) -> &mut Self {
         self.commands.push_back(Command::Text(s.as_ref().into()));
+        self
     }
 
-    pub fn print<T: Print>(&mut self, t: T) {
+    pub fn print<T: Print>(&mut self, t: T) -> &mut Self {
         t.print(self);
+        self
     }
 }
 
@@ -198,24 +224,15 @@ pub trait Print {
 
 impl<T: fmt::Display> Print for T {
     fn print(&self, pp: &mut PrettyPrinter) {
-        pp.text(self.to_string())
+        pp.text(self.to_string());
     }
 }
-
-/*
-impl<'src> fmt::Display for PrettyPrinter<'src> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let string = self.render();
-        write!(f,"{}",string)
-    }
-}
-*/
 
 impl Print for Symbol {
     fn print(&self, pp: &mut PrettyPrinter){
         match *self {
             Symbol::Var(n) => {
-                let string = pp.table.get_str(n).unwrap();
+                let string = pp.table.borrow().get_str(n).unwrap();
                 pp.text(string);
             },
             Symbol::Gen(n) => {
@@ -228,10 +245,10 @@ impl Print for Symbol {
 impl Print for LitValue {
     fn print(&self, pp: &mut PrettyPrinter) {
         match *self {
-            LitValue::Int(x) => { pp.text(format!("{}", x)) }
-            LitValue::Real(x) => { pp.text(format!("{}", x)) }
-            LitValue::Char(x) => { pp.text(format!("{}", x)) }
-            LitValue::Bool(x) => { pp.text(format!("{}", x)) }
+            LitValue::Int(x) => { pp.text(format!("{}", x)); }
+            LitValue::Real(x) => { pp.text(format!("{}", x)); }
+            LitValue::Char(x) => { pp.text(format!("{}", x)); }
+            LitValue::Bool(x) => { pp.text(format!("{}", x)); }
         }
     }
 }
@@ -254,7 +271,7 @@ impl Print for Expr {
             Expr::App(e1, e2) => {
                 pp.text("(");
                 e1.print(pp);
-                pp.text(" => ");
+                pp.text(" ");
                 e2.print(pp);
                 pp.text(")");
             }
@@ -266,26 +283,30 @@ impl Print for Expr {
 }
 
 
+
 #[test]
 pub fn test() {
-    let mut pp = PrettyPrinter::new(120,SymTable::with_capacity(0));
-    pp.wrapped(20, |pp| {
-        pp.text("case");
-        pp.text("x");
-        pp.nested(2, |pp| {
-            pp.line();
-            pp.text("of _ => bar");
-        });
-        pp.nested(3, |pp| {
-            pp.line();
-            pp.nested(2, |pp| {
-                pp.text("| _ => foo");
-                pp.text("bar baz qux");
-                pp.text("flub");
-                pp.text("mosoaic");
+    let mut table = Rc::new(RefCell::new(SymTable::new()));
+    let mut pp = PrettyPrinter::new(120,table);
+    pp.wrapped(20, |pp| { pp
+        .text("case")
+        .text("x")
+        .nested(2, |pp| { pp
+            .line()
+            .text("of _ => bar")
+        })
+        .nested(3, |pp| { pp
+            .line()
+            .nested(2, |pp| { pp
+                .text("| _ => foo")
+                .text("bar baz qux")
+                .text("flub")
+                .text("mosoaic")
             })
-        });
+        })
     });
     println!("{}",pp.render());
+    println!("{}",pp.render());
+    println!("{}",pp.render());
 }
-*/
+

@@ -4,6 +4,7 @@ mod ast;
 mod pretty;
 mod lexer;
 mod parser;
+mod infer;
 mod repl;
 
 fn main() {

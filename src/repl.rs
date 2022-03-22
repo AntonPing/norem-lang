@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use rustyline::{Editor, Result};
 use rustyline::error::ReadlineError;
 use rustyline::validate::{
@@ -60,13 +63,18 @@ pub fn run_repl() {
     
 }
 
-fn command_line<'src>(input: &'src str) {
-    let mut table: SymTable<'src> = symbol::SymTable::new();
-    let mut p = parser::Parser::new(
-        input, &mut table);
-    let mut pp = pretty::PrettyPrinter::new(120,p.table());
-    if let Some(expr) = p.read_app() {
-        expr.print(&mut pp);
+fn command_line<'src,'tbl>(input: &'src str) {
+    use parser::*;
+    use pretty::*;
+    use symbol::*;
+
+
+    let mut table = Rc::new(RefCell::new(SymTable::new()));
+    let mut p = Parser::new(input, table.clone());
+    let mut pp = PrettyPrinter::new(120,table.clone());
+    if let Some(res) = p.read_app() {
+        pp.print(res);
+        println!("result {}",pp.render());
     }
     println!("cmd {}",input);
 }
