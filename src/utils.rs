@@ -1,5 +1,10 @@
+use crate::{ast::*, symbol::Symbol};
+
 use std::fmt;
 
+
+
+/*
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Position {
     pub line: usize,
@@ -149,7 +154,7 @@ impl Span {
     */
 }
 
-/*
+
 impl std::ops::Add<Span> for Span {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
@@ -175,7 +180,7 @@ impl std::ops::AddAssign<Span> for Span {
         self.end = rhs.end;
     }
 }
-*/
+
 
 
 #[cfg(test)]
@@ -186,4 +191,19 @@ mod test {
     fn spanned_size() {
         //assert_eq!(std::mem::size_of::<Span>(), 16);
     }
+}
+*/
+
+pub fn lit_value_type(val: LitValue) -> LitType {
+    match val {
+        LitValue::Bool(_) => LitType::Bool,
+        LitValue::Char(_) => LitType::Char,
+        LitValue::Int(_) => LitType::Int,
+        LitValue::Real(_) => LitType::Real,
+    }
+}
+
+
+pub fn unfold_lam(expr: &Expr) -> (Vec<&Symbol>,&Expr) {
+    unimplemented!()
 }

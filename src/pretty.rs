@@ -230,13 +230,19 @@ impl<T: fmt::Display> Print for T {
 
 impl Print for Symbol {
     fn print(&self, pp: &mut PrettyPrinter){
-        match *self {
-            Symbol::Var(n) => {
+        match self {
+            &Symbol::Var(n) => {
                 let string = pp.table.borrow().get_str(n).unwrap();
                 pp.text(string);
-            },
-            Symbol::Gen(n) => {
+            }
+            &Symbol::Gen(n) => {
                 pp.text(format!("#{}", n));
+            }
+            &Symbol::Forall(n) => { 
+                let char = 
+                    "abcdefghijklmnopqrstuvwxyz"
+                    .to_string().chars().nth(n).unwrap();
+                pp.text(char.to_string());
             }
         }
     }

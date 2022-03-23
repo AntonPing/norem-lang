@@ -1,4 +1,4 @@
-//mod utils;
+mod utils;
 mod symbol;
 mod ast;
 mod pretty;

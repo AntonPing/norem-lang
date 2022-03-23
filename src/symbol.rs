@@ -4,6 +4,7 @@ use std::fmt;
 pub enum Symbol {
     Var(usize),
     Gen(usize),
+    Forall(usize),
 }
 
 #[derive(Clone, PartialEq)]
@@ -59,8 +60,12 @@ impl<'src> SymTable<'src> {
 impl fmt::Debug for Symbol {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
         match self {
-            Symbol::Var(n) => write!(f, "sym({})", n),
-            Symbol::Gen(n) => write!(f, "#{}", n),
+            &Symbol::Var(n) => write!(f, "sym({})", n),
+            &Symbol::Gen(n) => write!(f, "#{}", n),
+            &Symbol::Forall(n) => write!(f,"{}",
+                "abcdefghijklmnopqrstuvwxyz".to_string().chars().nth(n).unwrap()
+            )
+
         }
     }
 }
