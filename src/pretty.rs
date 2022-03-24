@@ -212,7 +212,7 @@ impl<'src> PrettyPrinter<'src> {
         self
     }
 
-    pub fn print<T: Print>(&mut self, t: T) -> &mut Self {
+    pub fn print<T: Print>(&mut self, t: &T) -> &mut Self {
         t.print(self);
         self
     }

@@ -48,7 +48,7 @@ impl TypeVar {
 
     fn subst(&self, sub: &Subst) -> TypeVar {
         match self {
-            TypeVar::Lit(lit) => {
+            TypeVar::Lit(_) => {
                 self.clone()
             }
             TypeVar::Var(x) => {
@@ -64,11 +64,12 @@ impl TypeVar {
             }
         }
     }
-    fn occur_check(&self, x: Symbol) -> bool {
-        self.ftv().contains(&x) > 0
+    fn occur_check(&self, x: &Symbol) -> bool {
+        self.ftv().contains(x) > 0
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum Scheme {
     Mono(TypeVar),
     Poly(usize,TypeVar),
@@ -109,19 +110,19 @@ impl Constraints {
         while let Some((ty1,ty2)) = self.cons.pop() {
             let ty1 = ty1.subst(&map);
             let ty2 = ty2.subst(&map);
-            match (ty1,ty2) {
+            match (&ty1,&ty2) {
                 (TypeVar::Var(x), _) => {
-                    if ty2.occur_check(x) {
+                    if ty2.occur_check(&x) {
                         return Err("Occur check failed!".to_string());
                     } else {
-                        map.insert(x, ty2.clone());
+                        map.insert(*x, ty2);
                     }
                 }
                 (_, TypeVar::Var(x)) => {
-                    if ty1.occur_check(x) {
+                    if ty1.occur_check(&x) {
                         return Err("Occur check failed!".to_string());
                     } else {
-                        map.insert(x, ty1.clone());
+                        map.insert(*x, ty1);
                     }
                 }
                 (TypeVar::Lit(a), TypeVar::Lit(b)) => {
@@ -131,10 +132,18 @@ impl Constraints {
                         return Err(format!("Can't unify {:?} and {:?}!",a,b));
                     }
                 }
-                (TypeVar::Arr(a1,a2),
-                    TypeVar::Arr(b1,b2)) => {
-                    self.cons.push((*a1,*b1));
-                    self.cons.push((*a2,*b2));
+                (&TypeVar::Arr(_,_), &TypeVar::Arr(_,_)) => {
+
+                    match (ty1, ty2) {
+                        (TypeVar::Arr(a1,a2),
+                        TypeVar::Arr(b1,b2)) => {
+                        
+                            self.cons.push((*a1,*b1));
+                            self.cons.push((*a2,*b2));
+                        }
+                        _ => { unimplemented!() }
+                    }
+
                 }
                 (a,b) => {
                     return Err(format!("Can't unify {:?} and {:?}!",a,b))
@@ -198,12 +207,11 @@ impl Environment {
     }
 
     fn update(&mut self, k: Symbol, v: Scheme) -> usize {
+        self.add_scheme(&v);
         if let Some(old) = self.current.insert(k,v) {
-            self.add_scheme(&v);
             self.remove_scheme(&old);
             self.history.push(EnvHistory::Update(k,old));
         } else {
-            self.add_scheme(&v);
             self.history.push(EnvHistory::Insert(k));
         }
         self.history.len()
@@ -228,8 +236,8 @@ impl Environment {
             if let Some(row) = self.history.pop() {
                 match row {
                     EnvHistory::Delete(x,sc) => {
-                        let r = self.current.insert(x, sc.clone());
                         self.add_scheme(&sc);
+                        let r = self.current.insert(x, sc);
                         assert!(r.is_none());
                     }
                     EnvHistory::Insert(x) => {
@@ -237,10 +245,10 @@ impl Environment {
                         assert!(r.is_some());
                     }
                     EnvHistory::Update(x,sc) => {
-                        let r = self.current.insert(x,sc);
                         self.add_scheme(&sc);
+                        let r = self.current.insert(x,sc);
                         self.remove_scheme(&r.unwrap());
-                        assert!(r.is_some());
+                        //assert!(r.is_some());
                     }
                     EnvHistory::Nothing => {
                         // Well, Nothing...
@@ -253,23 +261,24 @@ impl Environment {
     }
 }
 
-struct Infer<'src> {
-    env: HashMap<Symbol,Scheme>,
+pub struct Infer<'src> {
+    env: Environment,
     cons: Constraints,
     table: Rc<RefCell<SymTable<'src>>>,
     err_msg: Vec<String>,
 }
 
 impl<'src> Infer<'src> {
-    fn new(table: Rc<RefCell<SymTable<'src>>>) -> Infer<'src> {
+    pub fn new(table: Rc<RefCell<SymTable<'src>>>) -> Infer<'src> {
         Infer {
-            env: HashMap::new(),
+            env: Environment::new(),
             cons: Constraints::new(),
             table: table,
             err_msg: Vec::new()
         }
     }
 
+    /*
     fn update(&mut self, x: Symbol, sc: Scheme) -> Option<(Symbol,Scheme)> {
         let old = self.env.insert(x, sc);
         old.map(|sc| (x,sc))
@@ -280,26 +289,18 @@ impl<'src> Infer<'src> {
             self.env.insert(x, sc);
         }
     }
-
-    fn scope<F,T>(&mut self, func: F) -> Result<T,String>
-    where F: Fn(&mut Self) -> Result<T,String> {
+    */
 
 
-
-
-
-
-    }
-
-    fn newvar(&mut self) -> TypeVar {
-        TypeVar::Var(self.table.borrow_mut().gensym())
+    fn newvar(&mut self) -> Symbol {
+        self.table.borrow_mut().gensym()
     }
 
     fn generalize(&mut self, ty: &TypeVar) -> Scheme {
         let mut sub = HashMap::new();
         let mut len = 0;
         for (x,_) in ty.ftv() {
-            if !self.env.contains_key(&x) {
+            if !self.env.contains(x) {
                 sub.insert(x, TypeVar::Var(Symbol::Forall(len)));
                 len += 1;
             }
@@ -316,8 +317,8 @@ impl<'src> Infer<'src> {
             Scheme::Poly(n, ty) => {
                 let mut sub = HashMap::new();
                 for x in 0..*n {
-                    let new = self.newvar();
-                    sub.insert(Symbol::Forall(x),new);
+                    let new = TypeVar::Var(self.newvar());
+                    sub.insert(Symbol::Forall(x), new);
                 }
                 ty.subst(&sub)
             }
@@ -328,19 +329,21 @@ impl<'src> Infer<'src> {
     }
     fn infer(&mut self, expr: &Expr) -> Result<TypeVar,String> {
         match expr {
-            &Expr::Lit(lit) => {
-                Ok(TypeVar::Lit(lit_value_type(lit)))
+            Expr::Lit(lit) => {
+                Ok(TypeVar::Lit(lit_value_type(lit.clone())))
             }
             Expr::Var(sym) => {
                 match sym {
-                    Symbol::Var(x) => {
-                        if let Some(sc) = self.env.get(sym) {
-                            Ok(self.instantiate(sc))
+                    Symbol::Var(_) => {
+                        let res = self.env.lookup(*sym).map(|x|x.clone());
+                        if let Some(sc) = res {
+                            let ty = self.instantiate(&sc);
+                            Ok(ty)
                         } else {
                             Err("Variable not in the environment!".to_string())
                         }
                     }
-                    Symbol::Gen(x) => {
+                    Symbol::Gen(_) => {
                         // maybe somthing???
                         unimplemented!()
                     }
@@ -351,38 +354,58 @@ impl<'src> Infer<'src> {
                 
             }
             Expr::Lam(x,e) => {
-                let x2 = self.newvar();
-                let old = self.update(*x, Scheme::Mono(x2));
+                let x2 = TypeVar::Var(self.newvar());
+                let old = self.env.update(*x, Scheme::Mono(x2.clone()));
                 let t2 = self.infer(e)?;
-                self.recover(old);
+                self.env.recover(old);
                 Ok(TypeVar::Arr(Box::new(x2),Box::new(t2)))
             }
             Expr::App(ea,eb) => {
                 let ta = self.infer(ea)?;
                 let tb = self.infer(eb)?;
-                let tc = self.newvar();
-                self.unify(&ta, 
-                    &TypeVar::Arr(Box::new(tb),Box::new(tc.clone())));
+                let tc = TypeVar::Var(self.newvar());
+                self.unify(&ta, &TypeVar::Arr(Box::new(tb),Box::new(tc.clone())));
                 Ok(tc)
             },
             Expr::Let(decls, body) => {
+                let old = self.env.backup();
+                
                 for decl in decls {
                     self.infer_delc(decl)?;
                 }
                 let ty = self.infer(body)?;
                 
-                self.env.recover(mark);
-                Ok(tb)
+                self.env.recover(old);
+
+                Ok(ty)
+            }
+            _ => {
+                unimplemented!()
             }
         }
     }
 
-    pub fn infer_delc(&mut self, decl: &DeclKind) -> Result<(),String> {
+    fn infer_delc(&mut self, decl: &DeclKind) -> Result<(),String> {
         match decl {
             DeclKind::Val(ValDecl{
                 name,args,body,span
             }) => {
-                unimplemented!()
+
+                let old = self.env.backup();
+
+                for arg in args {
+                    let new = TypeVar::Var(self.newvar());
+                    self.env.update(*arg, Scheme::Mono(new));
+                }
+
+                let ty = self.infer(body)?;
+                self.env.recover(old);
+
+                let res = self.generalize(&ty);
+                self.env.update(*name, res);
+
+                Ok(())
+
             }
             _ => {
                 unimplemented!()
@@ -391,43 +414,15 @@ impl<'src> Infer<'src> {
     }
 
 
-    fn infer_top(&mut self, exp: &ExprRef) -> Result<Scheme,String> {
-        let mark = self.env.backup();
+    pub fn infer_top(&mut self, exp: &Expr) -> Result<Scheme,String> {
+        let old = self.env.backup();
+        
         let ty = self.infer(&exp)?;
         let sub = self.cons.solve()?;
-        self.env.recover(mark);
-
+        
+        self.env.recover(old);
 
         let sc = self.generalize(&ty.subst(&sub));
         Ok(sc)
     }
-}
-
-pub struct inferState {
-    variable: Vec<Type>,
-    enviroment: HashMap<Symbol,Type>,
-}
-impl inferState {
-
-    pub fn new() -> Self {
-        inferState { variable: Vec::new(), enviroment: HashMap::new() }
-    }
-
-    pub fn dive<'a>(&self, ty: Type) -> Type {
-        match ty {
-            Type::Lit(_) => { ty }
-            Type::Arr(_ , _) => { ty }
-            Type::Var(Symbol::Gen(n)) => {
-                self.variable[n].clone()
-            }
-            Type::Var(_) => { ty }
-        }
-    } 
-
-    pub fn unify(ty1: &Type, ty2: &Type) {
-        match 
-
-
-    }
-
 }

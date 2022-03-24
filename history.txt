@@ -2,3 +2,4 @@
 adfasd
 (dfad\nsadfasdfsdsadfsa\ndafsadsdssddsdwe)
 fn x y => x y
+fn f x => f x
