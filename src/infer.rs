@@ -90,20 +90,6 @@ impl Scheme {
             }
         }
     }
-
-    fn rename(&self, table: SymTable) -> TypeVar {
-        match self {
-            Scheme::Mono(ty) => { ty.clone() }
-            Scheme::Poly(xs, ty) => {
-                let mut sub = HashMap::new();
-                for x in xs {
-                    let newvar = table.gensym();
-                    sub.insert(Symbol::Forall(*x), TypeVar::Var(newvar));
-                }
-                ty.subst(&sub)
-            }
-        }
-    }
 }
 
 
@@ -160,6 +146,113 @@ impl Constraints {
 }
 
 
+enum EnvHistory {
+    // in env no such key, symbol was inserted
+    Insert(Symbol),
+    // in env is such key, old data covered
+    Update(Symbol,Scheme),
+    // symbol not in env, nothing happened
+    Nothing,
+    // symbol was deleted from env
+    Delete(Symbol,Scheme),
+}
+
+struct Environment {
+    current: HashMap<Symbol,Scheme>,
+    freevars: HashBag<Symbol>,
+    history: Vec<EnvHistory>,
+}
+
+impl Environment {
+    fn new() -> Environment {
+        Environment {
+            current: HashMap::new(),
+            freevars: HashBag::new(),
+            history: Vec::new(),
+        }
+    }
+
+    fn lookup(&self, x: Symbol) -> Option<&Scheme> {
+        self.current.get(&x)
+    }
+
+    fn contains(&self, x: Symbol) -> bool {
+        self.freevars.contains(&x) > 0
+    }
+
+    fn add_scheme(&mut self, sc: &Scheme) {
+        for (x,n) in sc.ftv() {
+            self.freevars.insert_many(x, n);
+        }
+    }
+
+    fn remove_scheme(&mut self, sc: &Scheme) {
+        for (x,n) in sc.ftv() {
+            if let Some((_,m)) = self.freevars.get(&x) {
+                self.freevars.take_all(&x);
+                self.freevars.insert_many(x, m - n);
+            } else {
+                self.freevars.insert_many(x, n);
+            }
+        }
+    }
+
+    fn update(&mut self, k: Symbol, v: Scheme) -> usize {
+        if let Some(old) = self.current.insert(k,v) {
+            self.add_scheme(&v);
+            self.remove_scheme(&old);
+            self.history.push(EnvHistory::Update(k,old));
+        } else {
+            self.add_scheme(&v);
+            self.history.push(EnvHistory::Insert(k));
+        }
+        self.history.len()
+    }
+
+    fn delete(&mut self, k: Symbol) -> usize {
+        if let Some(old) = self.current.remove(&k) {
+            self.remove_scheme(&old);
+            self.history.push(EnvHistory::Delete(k,old));
+        } else {
+            self.history.push(EnvHistory::Nothing);
+        }
+        self.history.len()
+
+    }
+    fn backup(&self) -> usize {
+        self.history.len()
+    }
+
+    fn recover(&mut self, mark: usize) {
+        for _ in mark..self.history.len() {
+            if let Some(row) = self.history.pop() {
+                match row {
+                    EnvHistory::Delete(x,sc) => {
+                        let r = self.current.insert(x, sc.clone());
+                        self.add_scheme(&sc);
+                        assert!(r.is_none());
+                    }
+                    EnvHistory::Insert(x) => {
+                        let r = self.current.remove(&x);
+                        assert!(r.is_some());
+                    }
+                    EnvHistory::Update(x,sc) => {
+                        let r = self.current.insert(x,sc);
+                        self.add_scheme(&sc);
+                        self.remove_scheme(&r.unwrap());
+                        assert!(r.is_some());
+                    }
+                    EnvHistory::Nothing => {
+                        // Well, Nothing...
+                    }
+                }
+            } else {
+                panic!("Can't Be!")
+            }
+        }
+    }
+}
+
 struct Infer<'src> {
     env: HashMap<Symbol,Scheme>,
     cons: Constraints,
@@ -186,6 +279,16 @@ impl<'src> Infer<'src> {
         if let Some((x,sc)) = record {
             self.env.insert(x, sc);
         }
+    }
+
+    fn scope<F,T>(&mut self, func: F) -> Result<T,String>
+    where F: Fn(&mut Self) -> Result<T,String> {
+
+
+
+
+
+
     }
 
     fn newvar(&mut self) -> TypeVar {
@@ -238,7 +341,11 @@ impl<'src> Infer<'src> {
                         }
                     }
                     Symbol::Gen(x) => {
-                        Ok(exp.clone())
+                        // maybe somthing???
+                        unimplemented!()
+                    }
+                    Symbol::Forall(_) => {
+                        unimplemented!()
                     }
                 }
                 
@@ -258,16 +365,32 @@ impl<'src> Infer<'src> {
                     &TypeVar::Arr(Box::new(tb),Box::new(tc.clone())));
                 Ok(tc)
             },
-            Expr::Let(decl, body) => {
-                let ta = self.infer(ea)?;
-                let sc = self.generalize(&ta);
-                let mark = self.env.update(*x, &sc);
-                let tb = self.infer(eb)?;
+            Expr::Let(decls, body) => {
+                for decl in decls {
+                    self.infer_delc(decl)?;
+                }
+                let ty = self.infer(body)?;
+                
                 self.env.recover(mark);
                 Ok(tb)
             }
         }
     }
+
+    pub fn infer_delc(&mut self, decl: &DeclKind) -> Result<(),String> {
+        match decl {
+            DeclKind::Val(ValDecl{
+                name,args,body,span
+            }) => {
+                unimplemented!()
+            }
+            _ => {
+                unimplemented!()
+            }
+        }
+    }
+
+
     fn infer_top(&mut self, exp: &ExprRef) -> Result<Scheme,String> {
         let mark = self.env.backup();
         let ty = self.infer(&exp)?;
