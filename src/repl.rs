@@ -70,7 +70,7 @@ fn command_line<'src,'tbl>(input: &'src str) {
     use symbol::*;
 
 
-    let mut table = Rc::new(RefCell::new(SymTable::new()));
+    let table = Rc::new(RefCell::new(SymTable::new()));
     let mut p = Parser::new(input, table.clone());
     let mut pp = PrettyPrinter::new(120,table.clone());
     if let Some(res) = p.read_app() {

@@ -76,9 +76,6 @@ pub enum Scheme {
 }
 
 impl Scheme {
-    fn new(ty: TypeVar) -> Scheme {
-        Scheme::Mono(ty)
-    }
     fn ftv(&self) -> VarSet {
         match self {
             Scheme::Mono(ty) => { ty.ftv() }
@@ -154,18 +151,19 @@ impl Constraints {
     }
 }
 
-
+#[derive(Clone, Debug, PartialEq)]
 enum EnvHistory {
-    // in env no such key, symbol was inserted
-    Insert(Symbol),
     // in env is such key, old data covered
     Update(Symbol,Scheme),
-    // symbol not in env, nothing happened
-    Nothing,
+    // in env no such key, symbol was inserted
+    Insert(Symbol),
     // symbol was deleted from env
     Delete(Symbol,Scheme),
+    // symbol not in env, nothing happened
+    Nothing,
 }
 
+#[derive(Clone, Debug, PartialEq)]
 struct Environment {
     current: HashMap<Symbol,Scheme>,
     freevars: HashBag<Symbol>,
@@ -178,6 +176,13 @@ impl Environment {
             current: HashMap::new(),
             freevars: HashBag::new(),
             history: Vec::new(),
+        }
+    }
+
+    fn debug(&self) {
+        dbg!(self);
+        for x in &self.freevars {
+            dbg!(x);
         }
     }
 
@@ -199,14 +204,18 @@ impl Environment {
         for (x,n) in sc.ftv() {
             if let Some((_,m)) = self.freevars.get(&x) {
                 self.freevars.take_all(&x);
-                self.freevars.insert_many(x, m - n);
+                assert!(m >= n);
+                if m > n {
+                    self.freevars.insert_many(x, m - n);
+                }
             } else {
-                self.freevars.insert_many(x, n);
+                panic!("symbol not found in freevars!");
             }
         }
     }
 
     fn update(&mut self, k: Symbol, v: Scheme) -> usize {
+        let back = self.backup();
         self.add_scheme(&v);
         if let Some(old) = self.current.insert(k,v) {
             self.remove_scheme(&old);
@@ -214,17 +223,18 @@ impl Environment {
         } else {
             self.history.push(EnvHistory::Insert(k));
         }
-        self.history.len()
+        back
     }
 
     fn delete(&mut self, k: Symbol) -> usize {
+        let back = self.backup();
         if let Some(old) = self.current.remove(&k) {
             self.remove_scheme(&old);
             self.history.push(EnvHistory::Delete(k,old));
         } else {
             self.history.push(EnvHistory::Nothing);
         }
-        self.history.len()
+        back
 
     }
     fn backup(&self) -> usize {
@@ -232,23 +242,25 @@ impl Environment {
     }
 
     fn recover(&mut self, mark: usize) {
+        //println!("recover {} from {}",mark,self.history.len());
         for _ in mark..self.history.len() {
             if let Some(row) = self.history.pop() {
-                match row {
-                    EnvHistory::Delete(x,sc) => {
-                        self.add_scheme(&sc);
-                        let r = self.current.insert(x, sc);
-                        assert!(r.is_none());
-                    }
-                    EnvHistory::Insert(x) => {
-                        let r = self.current.remove(&x);
-                        assert!(r.is_some());
-                    }
+                match row {    
                     EnvHistory::Update(x,sc) => {
                         self.add_scheme(&sc);
                         let r = self.current.insert(x,sc);
                         self.remove_scheme(&r.unwrap());
                         //assert!(r.is_some());
+                    }
+                    EnvHistory::Insert(x) => {
+                        let r = self.current.remove(&x);
+                        self.remove_scheme(&r.unwrap());
+                        //assert!(r.is_some());
+                    }
+                    EnvHistory::Delete(x,sc) => {
+                        self.add_scheme(&sc);
+                        let r = self.current.insert(x, sc);
+                        assert!(r.is_none());
                     }
                     EnvHistory::Nothing => {
                         // Well, Nothing...
@@ -303,6 +315,8 @@ impl<'src> Infer<'src> {
             if !self.env.contains(x) {
                 sub.insert(x, TypeVar::Var(Symbol::Forall(len)));
                 len += 1;
+            } else {
+                dbg!(x);
             }
         }
         if len == 0 {
@@ -355,9 +369,18 @@ impl<'src> Infer<'src> {
             }
             Expr::Lam(x,e) => {
                 let x2 = TypeVar::Var(self.newvar());
+
+                //self.env.debug();
                 let old = self.env.update(*x, Scheme::Mono(x2.clone()));
+                //self.env.debug();
+                
                 let t2 = self.infer(e)?;
+                
+                //self.env.debug();
+
                 self.env.recover(old);
+                //self.env.debug();
+                
                 Ok(TypeVar::Arr(Box::new(x2),Box::new(t2)))
             }
             Expr::App(ea,eb) => {

@@ -96,6 +96,12 @@ pub enum Token {
     #[token("type")]
     Type,
 
+    #[token("case")]
+    Case,
+
+    #[token("of")]
+    Of,
+
     #[token("fn")]
     Fn,
     

@@ -76,11 +76,11 @@ pub enum DeclKind {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Pattern {
     /// Algebraic datatype constructor, along with binding pattern
-    App(Symbol, Box<Pattern>),
+    App(Symbol, Vec<Pattern>),
     /// Constant
     Lit(LitValue),
     /// List pattern [pat1, ... patN]
-    //List(Vec<Pat>),
+    // List(Vec<Pat>),
     /// Record pattern { label1, label2 }, and whether it's flexible or not
     // Record(Vec<Row<Pat>>, bool),
     /// Variable binding

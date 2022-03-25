@@ -207,6 +207,22 @@ impl<'src> Parser<'src> {
         }
     }
 
+    pub fn read_expr(&mut self) -> Option<Expr> {
+        self.choices(vec![
+            { |p| p.read_lit() },
+            { |p| p.read_var() },
+            { |p| p.read_lam() },
+            { |p| p.with_paren(|p| p.read_app()) },
+            { |p| p.read_let() },
+            { |p| p.read_case() },
+        ])
+    }
+
+    pub fn read_lit(&mut self) -> Option<Expr> {
+        let lit = self.read_lit_value()?;
+        Some(Expr::Lit(lit))
+    }
+
     pub fn read_var(&mut self) -> Option<Expr> {
         self.read_token(Token::Var)?;
         let ident = self.parse_ident();
@@ -218,7 +234,7 @@ impl<'src> Parser<'src> {
         let args= self.many1(|p| p.read_ident())?;
         self.read_token(Token::EArrow)?;
         let body = self.read_app()?;
-        Some(args.iter().fold(body,
+        Some(args.iter().rev().fold(body,
             |e ,x| Expr::Lam(*x,Box::new(e))))
     }
 
@@ -237,13 +253,28 @@ impl<'src> Parser<'src> {
         Some(Expr::Let(decls, Box::new(expr)))
     }
 
-    pub fn read_expr(&mut self) -> Option<Expr> {
-        self.choices(vec![
-            { |p| p.read_lit_value().map(|x| Expr::Lit(x)) },
-            { |p| p.read_var() },
-            { |p| p.read_lam() },
-            { |p| p.with_paren(|p2| p2.read_app()) },
-        ])
+    pub fn read_case(&mut self) -> Option<Expr> {
+        self.read_token(Token::Case)?;
+        let expr = self.read_expr()?;
+        self.read_token(Token::Of)?;
+        let rules = self.many1(|p| {
+            p.read_token(Token::Bar)?;
+            p.read_rule()
+        })?;
+        Some(Expr::Case(Box::new(expr), rules))
+    }
+
+    pub fn read_rule(&mut self) -> Option<Rule> {
+        let first = self.span();
+
+        let pat = self.read_pattern()?;
+        self.read_token(Token::EArrow);
+        let expr = self.read_expr()?;
+
+        let last = self.span();
+        let span = Range { start: first.start, end: last.end };
+        
+        Some(Rule { pat, expr, span})
     }
 
     pub fn read_decl(&mut self) -> Option<DeclKind> {
@@ -274,12 +305,7 @@ impl<'src> Parser<'src> {
         self.peek_decl_end()?;
         let last = self.span();
         let span = Range { start: first.start, end: last.end };
-        Some(DeclKind::Val(ValDecl{
-            name: name,
-            args: args,
-            body: body,
-            span: Range { start: first.start, end: last.end }
-        }))
+        Some(DeclKind::Val(ValDecl{ name, args, body, span }))
     }
 
     pub fn read_data_decl(&mut self) -> Option<DeclKind> {
@@ -297,6 +323,12 @@ impl<'src> Parser<'src> {
         Some(DeclKind::Data(DataDecl{ name, args, branches, span }))
     }
 
+    pub fn read_varient(&mut self) -> Option<Variant> {
+        let constr = self.read_ident()?;
+        let args = self.many(|p| p.read_type());
+        Some(Variant{ constr, args })
+    }
+
     pub fn read_type_decl(&mut self) -> Option<DeclKind> {
         let first = self.span();
         self.read_token(Token::Type)?;
@@ -310,12 +342,31 @@ impl<'src> Parser<'src> {
         Some(DeclKind::Type(TypeDecl{ name, args, typ, span }))
     }
 
-    pub fn read_varient(&mut self) -> Option<Variant> {
-        let constr = self.read_ident()?;
-        let args = self.many(|p| p.read_type());
-        Some(Variant{ constr, args })
+    pub fn read_pattern(&mut self) -> Option<Pattern> {
+        self.choices(vec![
+            { |p| p.read_pat_lit() },
+            { |p| p.read_pat_var() },
+            { |p| p.read_pat_app() },
+        ])
     }
 
+    pub fn read_pat_lit(&mut self) -> Option<Pattern> {
+        let lit = self.read_lit_value()?;
+        Some(Pattern::Lit(lit))
+    }
+
+    pub fn read_pat_var(&mut self) -> Option<Pattern> {
+        let x = self.read_ident()?;
+        Some(Pattern::Var(x))
+    }
+
+    pub fn read_pat_app(&mut self) -> Option<Pattern> {
+        self.read_token(Token::LParen)?;
+        let cons = self.read_ident()?;
+        let args = self.many(|p| p.read_pattern());
+        self.read_token(Token::RParen)?;
+        Some(Pattern::App(cons, args))
+    }
 
     pub fn read_type(&mut self) -> Option<Type> {
         None
@@ -328,7 +379,6 @@ impl<'src> Parser<'src> {
 }
 
 
-
 #[test]
 pub fn parser_test() {
     let string = "fn f x => f x";
@@ -336,6 +386,22 @@ pub fn parser_test() {
     let mut par = Parser::new(string,table);
 
     let expr = par.read_app();
+
+    println!("{:?}",expr);
+}
+
+#[test]
+pub fn parser_test2() {
+    let string = "
+        case (f x) of
+        | 2 => 3
+        | 3 => 4
+    ";
+
+    let mut table = Rc::new(RefCell::new(symbol::SymTable::new()));
+    let mut par = Parser::new(string,table);
+
+    let expr = par.read_expr();
 
     println!("{:?}",expr);
 

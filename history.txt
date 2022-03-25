@@ -3,3 +3,7 @@ adfasd
 (dfad\nsadfasdfsdsadfsa\ndafsadsdssddsdwe)
 fn x y => x y
 fn f x => f x
+fn f x => fx
+fn f x => f x
+fn f g x => (f x) (g x)
+fn f x => f x
