@@ -219,6 +219,7 @@ impl<'src> Parser<'src> {
         self.choices(vec![
             { |p| p.read_lit() },
             { |p| p.read_var() },
+            { |p| p.read_cons() },
             { |p| p.read_lam() },
             { |p| p.with_paren(|p| p.read_app()) },
             { |p| p.read_let() },
@@ -235,6 +236,12 @@ impl<'src> Parser<'src> {
         self.read_token(Token::Var)?;
         let ident = self.parse_ident();
         Some(Expr::Var(ident))
+    }
+
+    pub fn read_cons(&mut self) -> Option<Expr> {
+        self.read_token(Token::CapVar)?;
+        let ident = self.parse_ident();
+        Some(Expr::Cons(ident))
     }
 
     pub fn read_lam(&mut self) -> Option<Expr> {
@@ -264,7 +271,7 @@ impl<'src> Parser<'src> {
 
     pub fn read_case(&mut self) -> Option<Expr> {
         self.read_token(Token::Case)?;
-        let expr = self.read_expr()?;
+        let expr = self.read_app()?;
         self.read_token(Token::Of)?;
         let rules = self.many1(|p| {
             p.read_token(Token::Bar)?;
@@ -341,7 +348,7 @@ impl<'src> Parser<'src> {
     pub fn read_type_decl(&mut self) -> Option<DeclKind> {
         let first = self.span();
         self.read_token(Token::Type)?;
-        let name = self.read_ident()?;
+        let name = self.read_cap_ident()?;
         let args = self.many(|p| p.read_ident());
         self.read_token(Token::Equal)?;
         let typ = self.read_type()?;
@@ -355,6 +362,8 @@ impl<'src> Parser<'src> {
         self.choices(vec![
             { |p| p.read_pat_lit() },
             { |p| p.read_pat_var() },
+            // construtor without arguments
+            { |p| p.read_pat_single_cons() },
             { |p| p.read_pat_app() },
             { |p| p.read_pat_wild() },
         ])
@@ -370,9 +379,14 @@ impl<'src> Parser<'src> {
         Some(Pattern::Var(x))
     }
 
+    pub fn read_pat_single_cons(&mut self) -> Option<Pattern> {
+        let cons = self.read_cap_ident()?;
+        Some(Pattern::App(cons, Vec::new()))
+    }
+
     pub fn read_pat_app(&mut self) -> Option<Pattern> {
         self.read_token(Token::LParen)?;
-        let cons = self.read_ident()?;
+        let cons = self.read_cap_ident()?;
         let args = self.many(|p| p.read_pattern());
         self.read_token(Token::RParen)?;
         Some(Pattern::App(cons, args))
@@ -427,57 +441,4 @@ impl<'src> Parser<'src> {
             None
         }
     }
-
 }
-
-
-#[test]
-pub fn parser_test() {
-    let string = "fn f x => f x";
-    let mut table = Rc::new(RefCell::new(symbol::SymTable::new()));
-    let mut par = Parser::new(string,table);
-
-    let expr = par.read_app();
-
-    println!("{:?}",expr);
-}
-
-#[test]
-pub fn parser_test2() {
-    let string = "
-        case (f x) of
-        | 2 => 3
-        | 3 => 4
-    ";
-
-    let mut table = Rc::new(RefCell::new(symbol::SymTable::new()));
-    let mut par = Parser::new(string,table);
-
-    let expr = par.read_expr();
-
-    println!("{:?}",expr);
-
-
-}
-
-
-/*
-
-pub fn read_const_func(par: &mut Parser) -> Option<TermRef> {
-    macro_rules! const_parser {
-        ($term:expr, $str:expr) => {
-            |p| {
-                p.read_string($str)?;
-                Some($term)
-            }
-        };
-    }
-}
-
-pub fn read_path(par: &mut Parser) -> Option<String> {
-    par.try_read(|p|{
-        let string = p.read_regex(&*PATH_RE)?;
-        Some(string.to_string())
-    })
-}
-*/

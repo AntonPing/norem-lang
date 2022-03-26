@@ -5,6 +5,7 @@ use crate::symbol::*;
 pub enum Expr {
     Lit(LitValue),
     Var(Symbol),
+    Cons(Symbol),
     Lam(Symbol, Box<Expr>),
     App(Box<Expr>, Box<Expr>),
     Let(Vec<DeclKind>,Box<Expr>),
