@@ -78,6 +78,12 @@ pub enum Token {
     #[token("|")]
     Bar,
 
+    #[token("_")]
+    Wild,
+
+    #[token("=")]
+    Equal,
+
     #[token("let")]
     Let,
     
@@ -110,21 +116,6 @@ pub enum Token {
     
     #[token("->")]
     Arrow,
-    
-    #[token("+")]
-    Add,
-    
-    #[token("-")]
-    Sub,
-    
-    #[token("*")]
-    Mul,
-    
-    #[token("/")]
-    Div,
-
-    #[token("=")]
-    Equal,
 
     #[regex(r#"[0-9]+"#)]
     Int,
@@ -139,8 +130,14 @@ pub enum Token {
     #[regex("\".+\"")]
     String,
 
-    #[regex(r#"[a-zA-Z][a-zA-Z]*"#)]
+    #[regex(r#"[:!#$%&*+./<=>?@\\^|\-~]+"#)]
+    Opr,
+
+    #[regex(r#"[a-z][a-zA-Z]*"#)]
     Var,
+
+    #[regex(r#"[A-Z][a-zA-Z]*"#)]
+    CapVar,
 
     #[error]
     #[regex(r"[ \t\n\r\f]+", logos::skip)]

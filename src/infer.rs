@@ -303,7 +303,6 @@ impl<'src> Infer<'src> {
     }
     */
 
-
     fn newvar(&mut self) -> Symbol {
         self.table.borrow_mut().gensym()
     }
@@ -369,17 +368,9 @@ impl<'src> Infer<'src> {
             }
             Expr::Lam(x,e) => {
                 let x2 = TypeVar::Var(self.newvar());
-
-                //self.env.debug();
                 let old = self.env.update(*x, Scheme::Mono(x2.clone()));
-                //self.env.debug();
-                
                 let t2 = self.infer(e)?;
-                
-                //self.env.debug();
-
                 self.env.recover(old);
-                //self.env.debug();
                 
                 Ok(TypeVar::Arr(Box::new(x2),Box::new(t2)))
             }
@@ -402,6 +393,7 @@ impl<'src> Infer<'src> {
 
                 Ok(ty)
             }
+            //Expr::Case((), ())
             _ => {
                 unimplemented!()
             }

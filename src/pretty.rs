@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::fmt::{self, Formatter, Display};
 use std::io::{self, Write};
 use std::collections::VecDeque;
+use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::symbol::*;
@@ -186,18 +187,18 @@ impl<'src> PrettyPrinter<'src> {
         res
     }
 
-    pub fn wrapped<F>(&mut self, width: usize, func: F) -> &mut Self
+    pub fn wrapped<F>(&mut self, width: usize, body: F) -> &mut Self
     where F: for<'a> Fn(&'a mut PrettyPrinter<'src>) -> &'a mut PrettyPrinter<'src> {
         self.commands.push_back(Command::Wrap(width));
-        func(self);
+        body(self);
         self.commands.push_back(Command::Unwrap);
         self
     }
 
-    pub fn nested<F>(&mut self, width: usize, func: F) -> &mut Self
+    pub fn nested<F>(&mut self, width: usize, body: F) -> &mut Self
     where F: for<'a> Fn(&'a mut PrettyPrinter<'src>) -> &'a mut PrettyPrinter<'src> {
         self.commands.push_back(Command::Indent(width));
-        func(self);
+        body(self);
         self.commands.push_back(Command::Dedent(width));
         self
     }
@@ -212,8 +213,39 @@ impl<'src> PrettyPrinter<'src> {
         self
     }
 
+    pub fn surrounded<F>(&mut self, left: F, body: F, right: F) -> &mut Self
+    where F: for<'a> Fn(&'a mut PrettyPrinter<'src>) -> &'a mut PrettyPrinter<'src> {
+        left(self);
+        body(self);
+        right(self);
+        self
+    }
+
+    pub fn seperated<F>(&mut self, vec: Vec<F>, delim: F) -> &mut Self
+    where F: for<'a> Fn(&'a mut PrettyPrinter<'src>) -> &'a mut PrettyPrinter<'src> {
+        if !vec.is_empty() {
+            vec[0](self);
+            for elem in &vec[1..] {
+                delim(self);
+                elem(self);
+            }
+        }
+        self
+    }
+
     pub fn print<T: Print>(&mut self, t: &T) -> &mut Self {
         t.print(self);
+        self
+    }
+
+    pub fn print_many<T: Print,D: Print>(&mut self, vec: &Vec<T>, delim: &D) -> &mut Self {
+        if !vec.is_empty() {
+            vec[0].print(self);
+            for elem in &vec[1..] {
+                delim.print(self);
+                elem.print(self);
+            }
+        }
         self
     }
 }
@@ -269,10 +301,11 @@ impl Print for Expr {
                 x.print(pp);
             }
             Expr::Lam(x, e) => {
-                pp.text("fn ");
-                x.print(pp);
-                pp.text(" => ");
-                e.print(pp);
+                pp
+                .text("fn ")
+                .print(x)
+                .text(" => ")
+                .print(e.deref());
             }
             Expr::App(e1, e2) => {
                 pp.text("(");
@@ -288,6 +321,86 @@ impl Print for Expr {
     }
 }
 
+impl Print for DeclKind {
+    fn print(&self, pp: &mut PrettyPrinter) {
+        match self {
+            DeclKind::Val(ValDecl { name,args,body,span}) => {
+                pp
+                .text("val ")
+                .print(name)
+                .print_many(args,&" ".to_string())
+                .text(" = ")
+                .print(body);
+            }
+            DeclKind::Data(DataDecl { name,args,vars,span}) => {
+                pp
+                .text("data ")
+                .print(name)
+                .print_many(args,&" ".to_string())
+                .text(" = ")
+                .print_many(vars, &"|".to_string());
+            }
+            DeclKind::Type(TypeDecl { name,args,typ,span}) => {
+                pp
+                .text("type ")
+                .print(name)
+                .print_many(args,&" ".to_string())
+                .text(" = ")
+                .print(typ);
+            }
+
+        }
+    }
+}
+
+impl Print for Rule {
+    fn print(&self, pp: &mut PrettyPrinter) {
+        let Rule { pat, expr, span } = self;
+        pp
+        .text("| ")
+        .print(pat)
+        .text(" => ")
+        .print(expr);
+    }
+}
+
+impl Print for Pattern {
+    fn print(&self, pp: &mut PrettyPrinter) {
+        match self {
+            Pattern::App(cons,args) => {
+                pp
+                .text("(")
+                .print(cons)
+                .print_many(args, &" ".to_string())
+                .text(")");
+            }
+            Pattern::Lit(lit) => {
+                pp.print(lit);
+            }
+            Pattern::Var(sym) => {
+                pp.print(sym);
+            }
+            Pattern::Wild => {
+                pp.text("_");
+            }
+        }
+    }
+}
+
+impl Print for Type {
+    fn print(&self, pp: &mut PrettyPrinter) {
+        pp.text("[type]");
+    }
+}
+
+impl Print for Variant {
+    fn print(&self, pp: &mut PrettyPrinter) {
+        let Variant { cons, args } = self;
+        pp
+        .print(cons)
+        .print_many(args, &' '.to_string());
+    }
+}
 
 
 #[test]

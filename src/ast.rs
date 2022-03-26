@@ -38,7 +38,7 @@ pub enum LitType {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Variant {
-    pub constr: Symbol,
+    pub cons: Symbol,
     pub args: Vec<Type>,
 }
 
@@ -54,7 +54,7 @@ pub struct ValDecl {
 pub struct DataDecl {
     pub name: Symbol,
     pub args: Vec<Symbol>,
-    pub branches: Vec<Variant>,
+    pub vars: Vec<Variant>,
     pub span: Span,
 }
 

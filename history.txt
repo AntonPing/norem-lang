@@ -7,3 +7,10 @@ fn f x => fx
 fn f x => f x
 fn f g x => (f x) (g x)
 fn f x => f x
+let data RGB = R 
+let data RGB = R | G | B in case 1 of R => 2 end
+case 1 of A => 1
+a
+let val x = 1 in x end
+let data RGB = R | G | B in case 1 of R => 2 end
+let data RGB = R | G | B in 1 end

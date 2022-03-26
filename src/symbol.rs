@@ -1,11 +1,51 @@
 use std::collections::HashMap;
 use std::fmt;
+
+
+const BUILTIN: [&'static str; 11] = [
+    "and",
+    "or",
+    "not",
+    "+",
+    "-",
+    "*",
+    "/",
+    "Int",
+    "Char",
+    "Bool",
+    "Real"
+];
+
+pub const MIN_BUILDIN : usize = 0;
+pub const MAX_BUILDIN : usize = 10;
+
+pub const AND_ID : usize = 0;
+pub const OR_ID : usize = 1;
+pub const NOT_ID : usize = 2;
+pub const ADD_ID : usize = 3;
+pub const SUB_ID : usize = 4;
+pub const MUL_ID : usize = 5;
+pub const DIV_ID : usize = 6;
+pub const INT_ID : usize = 7;
+pub const CHAR_ID : usize = 8;
+pub const BOOL_ID : usize = 9;
+pub const REAL_ID : usize = 10;
+
 #[derive(Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Symbol {
     Var(usize),
     Gen(usize),
     Forall(usize),
 }
+
+impl Symbol {
+    pub fn is_buildin(&self, id: usize) -> bool {
+        if let Symbol::Var(u) = self {
+            *u == id
+        } else { false }
+    }
+}
+
 
 #[derive(Clone, PartialEq)]
 pub struct SymTable<'src> {
@@ -19,7 +59,11 @@ pub struct SymTable<'src> {
 
 impl<'src> SymTable<'src> {
     pub fn new() -> SymTable<'src> {
-        SymTable::with_capacity(256)
+        let mut table = SymTable::with_capacity(256);
+        for sym in BUILTIN {
+            table.newsym(sym);
+        }
+        table
     }
     
     pub fn with_capacity(n: usize) -> SymTable<'src> {
@@ -65,7 +109,7 @@ impl fmt::Debug for Symbol {
             &Symbol::Forall(n) => write!(f,"{}",
                 "abcdefghijklmnopqrstuvwxyz".to_string().chars().nth(n).unwrap()
             )
-
         }
     }
 }
+

@@ -1,3 +1,4 @@
+use core::panic;
 use std::cell::RefCell;
 use std::ops::Range;
 use std::rc::Rc;
@@ -5,7 +6,7 @@ use std::rc::Rc;
 use logos::{Lexer,Span, Source, Logos};
 
 use crate::{lexer::*, symbol};
-use crate::symbol::{SymTable, Symbol};
+use crate::symbol::*;
 use crate::ast::*;
 
 pub struct Parser<'src> {
@@ -150,7 +151,8 @@ impl<'src> Parser<'src> {
     }
 
     pub fn parse_ident(&mut self) -> Symbol {
-        assert_eq!(self.token(), Token::Var);
+        assert!(self.token() == Token::Var
+            || self.token() == Token::CapVar);
         self.table.borrow_mut().newsym(self.slice())
     }
 
@@ -198,6 +200,12 @@ impl<'src> Parser<'src> {
         Some(ident)
     }
 
+    pub fn read_cap_ident(&mut self) -> Option<Symbol> {
+        self.read_token(Token::CapVar)?;
+        let ident = self.parse_ident();
+        Some(ident)
+    }
+
     pub fn read_lit_value(&mut self) -> Option<LitValue> {
         match self.next()? {
             Token::Int =>  { Some(LitValue::Int(self.parse_int())) }
@@ -241,7 +249,8 @@ impl<'src> Parser<'src> {
     pub fn read_app(&mut self) -> Option<Expr> {
         let exprs = self.many1(|p| p.read_expr())?;
         Some(exprs.into_iter().reduce(
-            |e1,e2| Expr::App(Box::new(e1),Box::new(e2))).unwrap())        
+            |e1,e2| Expr::App(Box::new(e1),Box::new(e2)))
+        .unwrap())        
     }
 
     pub fn read_let(&mut self) -> Option<Expr> {
@@ -311,22 +320,22 @@ impl<'src> Parser<'src> {
     pub fn read_data_decl(&mut self) -> Option<DeclKind> {
         let first = self.span();
         self.read_token(Token::Data)?;
-        let name = self.read_ident()?;
+        let name = self.read_cap_ident()?;
         let args = self.many(|p| p.read_ident());
         self.read_token(Token::Equal)?;
-        let branches = self.sep_by1(
+        let vars = self.sep_by1(
             |p| p.read_varient(),
             |p| p.read_token(Token::Bar))?;
         self.peek_decl_end()?;
         let last = self.span();
         let span = Range { start: first.start, end: last.end };
-        Some(DeclKind::Data(DataDecl{ name, args, branches, span }))
+        Some(DeclKind::Data(DataDecl{ name, args, vars, span }))
     }
 
     pub fn read_varient(&mut self) -> Option<Variant> {
-        let constr = self.read_ident()?;
-        let args = self.many(|p| p.read_type());
-        Some(Variant{ constr, args })
+        let cons = self.read_cap_ident()?;
+        let args = self.many(|p| p.read_type_arr());
+        Some(Variant{ cons, args })
     }
 
     pub fn read_type_decl(&mut self) -> Option<DeclKind> {
@@ -347,6 +356,7 @@ impl<'src> Parser<'src> {
             { |p| p.read_pat_lit() },
             { |p| p.read_pat_var() },
             { |p| p.read_pat_app() },
+            { |p| p.read_pat_wild() },
         ])
     }
 
@@ -368,12 +378,54 @@ impl<'src> Parser<'src> {
         Some(Pattern::App(cons, args))
     }
 
-    pub fn read_type(&mut self) -> Option<Type> {
-        None
+    pub fn read_pat_wild(&mut self) -> Option<Pattern> {
+        self.read_token(Token::Wild)?;
+        Some(Pattern::Wild)
     }
 
-    pub fn read_lit_type(&mut self) -> Option<Type> {
-        None
+    pub fn read_type(&mut self) -> Option<Type> {
+        self.choices(vec![
+            { |p| p.read_type_lit() },
+            { |p| p.read_type_var() },
+            { |p| p.with_paren(|p| p.read_type_arr()) },
+        ])
+    }
+
+    pub fn read_type_lit(&mut self) -> Option<Type> {
+        let lit = self.read_lit_type()?;
+        Some(Type::Lit(lit))
+    }
+
+    pub fn read_type_var(&mut self) -> Option<Type> {
+        let sym = self.read_cap_ident()?;
+        Some(Type::Var(sym))
+    }
+
+    pub fn read_type_arr(&mut self) -> Option<Type> {
+        let tys = self.sep_by1(
+            |p| p.read_type(),
+            |p| p.read_token(Token::Arrow)
+        )?; 
+
+        Some(tys.into_iter().reduce(
+            |t1,t2| Type::Arr(Box::new(t1), Box::new(t2))
+        ).unwrap())
+    }
+
+    pub fn read_lit_type(&mut self) -> Option<LitType> {
+        let sym = self.read_cap_ident()?;
+
+        if sym.is_buildin(INT_ID) {
+            Some(LitType::Int)
+        } else if sym.is_buildin(REAL_ID) {
+            Some(LitType::Real)
+        } else if sym.is_buildin(CHAR_ID) {
+            Some(LitType::Char)
+        } else if sym.is_buildin(BOOL_ID) {
+            Some(LitType::Bool)
+        } else {
+            None
+        }
     }
 
 }
