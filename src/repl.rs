@@ -14,7 +14,7 @@ use rustyline_derive::{Completer, Helper, Highlighter, Hinter};
 use crate::symbol::{self, SymTable};
 use crate::parser;
 use crate::pretty::{self, Print};
-use crate::infer;
+// use crate::infer;
 
 #[derive(Completer, Helper, Highlighter, Hinter)]
 struct InputValidator {
@@ -76,13 +76,10 @@ fn command_line<'src,'tbl>(input: &'src str) {
     if let Some(res) = p.read_app() {
         pp.print(&res);
         println!("result {}",pp.render());
-        let mut ti = infer::Infer::new(table.clone());
-        let ty = ti.infer_top(&res);
-        println!("type {:?}",ty);
+        //let mut ti = infer::Infer::new(table.clone());
+        //let ty = ti.infer_top(&res);
+        //println!("type {:?}",ty);
     }
-
-    
-
 
     println!("cmd {}",input);
 }

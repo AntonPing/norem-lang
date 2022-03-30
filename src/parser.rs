@@ -3,9 +3,10 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::rc::Rc;
 
-use logos::{Lexer,Span, Source, Logos};
+use logos::Lexer;
 
-use crate::{lexer::*, symbol};
+use crate::utils::*;
+use crate::lexer::*;
 use crate::symbol::*;
 use crate::ast::*;
 
@@ -30,7 +31,7 @@ impl<'src> Parser<'src> {
             table: table,
             stack: vec![(
                 Token::Error,
-                std::ops::Range {start: 0, end: 0 },
+                Span::zero(),
                 "???")],
             index: 0,
         }
@@ -42,8 +43,9 @@ impl<'src> Parser<'src> {
         // println!("{} ?= {}",self.index, self.stack.len());
         if self.index == self.stack.len(){
             if let Some(tok) = self.lexer.next() {
+                let Range { start, end } = self.lexer.span();
                 self.stack.push(
-                    (tok, self.lexer.span(), self.lexer.slice())
+                    (tok, Span::new(start,end), self.lexer.slice())
                 );
                 // println!("new token {:?}", tok);
                 Some(tok)
@@ -70,6 +72,15 @@ impl<'src> Parser<'src> {
     pub fn slice(&self) -> &'src str {
         let (_,_,slice) = self.stack[self.index];
         slice
+    }
+
+    pub fn spanned<T>(&mut self, func: Parsing<T>) -> Option<Spanned<T>> {
+        let start = self.span().start;
+        let res = func(self)?;
+        let end = self.span().end;
+        let span = Span { start, end };
+        Some(Spanned::new(res, span)) 
+
     }
 
     pub fn try_read<T>(&mut self, func: Parsing<T>) -> Option<T> {
@@ -246,54 +257,48 @@ impl<'src> Parser<'src> {
 
     pub fn read_lam(&mut self) -> Option<Expr> {
         self.read_token(Token::Fn)?;
-        let args= self.many1(|p| p.read_ident())?;
+        let args= self.many1(|p|p.read_ident())?;
         self.read_token(Token::EArrow)?;
-        let body = self.read_app()?;
-        Some(args.iter().rev().fold(body,
-            |e ,x| Expr::Lam(*x,Box::new(e))))
+        let body = self.spanned(|p|p.read_app())?;
+        Some(Expr::Lam(args,body))
     }
 
     pub fn read_app(&mut self) -> Option<Expr> {
-        let exprs = self.many1(|p| p.read_expr())?;
-        Some(exprs.into_iter().reduce(
-            |e1,e2| Expr::App(Box::new(e1),Box::new(e2)))
-        .unwrap())        
+        let exprs = self.many1(|p| p
+            .spanned(|p| p.read_expr()))?;
+        Some(Expr::App(exprs))        
     }
 
     pub fn read_let(&mut self) -> Option<Expr> {
         self.read_token(Token::Let)?;
-        let decls = self.many1(|p| p.read_decl())?;
+        let decls = self.many1(|p| p
+            .spanned(|p| p.read_decl()))?;
         self.read_token(Token::In)?;
-        let expr = self.read_expr()?;
+        let expr = self.spanned(|p| p.read_expr())?;
         self.read_token(Token::End)?;
-        Some(Expr::Let(decls, Box::new(expr)))
+        Some(Expr::Let(decls, expr))
     }
 
     pub fn read_case(&mut self) -> Option<Expr> {
         self.read_token(Token::Case)?;
-        let expr = self.read_app()?;
+        let expr = self.spanned(|p| p.read_app())?;
         self.read_token(Token::Of)?;
-        let rules = self.many1(|p| {
-            p.read_token(Token::Bar)?;
-            p.read_rule()
-        })?;
-        Some(Expr::Case(Box::new(expr), rules))
+        let rules = self.many1(|p| p
+            .spanned(|p| {
+                p.read_token(Token::Bar)?;
+                p.read_rule()
+            }))?;
+        Some(Expr::Case(expr, rules))
     }
 
     pub fn read_rule(&mut self) -> Option<Rule> {
-        let first = self.span();
-
-        let pat = self.read_pattern()?;
+        let pat = self.spanned(|p| p.read_pattern())?;
         self.read_token(Token::EArrow);
-        let expr = self.read_expr()?;
-
-        let last = self.span();
-        let span = Range { start: first.start, end: last.end };
-        
-        Some(Rule { pat, expr, span})
+        let expr = self.spanned(|p| p.read_expr())?;
+        Some(Rule { pat, expr})
     }
 
-    pub fn read_decl(&mut self) -> Option<DeclKind> {
+    pub fn read_decl(&mut self) -> Option<Decl> {
         self.choices(vec![
             { |p| p.read_val_decl() },
             { |p| p.read_data_decl() },
@@ -311,32 +316,32 @@ impl<'src> Parser<'src> {
         Some(())
     }
 
-    pub fn read_val_decl(&mut self) -> Option<DeclKind> {
-        let first = self.span();
-        self.read_token(Token::Val)?;
-        let name = self.read_ident()?;
-        let args = self.many(|p| p.read_ident());
-        self.read_token(Token::Equal)?;
-        let body = self.read_expr()?;
-        self.peek_decl_end()?;
-        let last = self.span();
-        let span = Range { start: first.start, end: last.end };
-        Some(DeclKind::Val(ValDecl{ name, args, body, span }))
+    pub fn read_val_decl(&mut self) -> Option<Decl> {
+        let res = self.spanned(|p| {
+            p.read_token(Token::Val)?;
+            let name = p.read_ident()?;
+            let args = p.many(|p| p.read_ident());
+            p.read_token(Token::Equal)?;
+            let body = p.read_expr()?;
+            p.peek_decl_end()?;
+            Some(ValDecl{ name, args, body })
+        })?;
+        Some(Decl::Val(res))
     }
 
-    pub fn read_data_decl(&mut self) -> Option<DeclKind> {
-        let first = self.span();
-        self.read_token(Token::Data)?;
-        let name = self.read_cap_ident()?;
-        let args = self.many(|p| p.read_ident());
-        self.read_token(Token::Equal)?;
-        let vars = self.sep_by1(
-            |p| p.read_varient(),
-            |p| p.read_token(Token::Bar))?;
-        self.peek_decl_end()?;
-        let last = self.span();
-        let span = Range { start: first.start, end: last.end };
-        Some(DeclKind::Data(DataDecl{ name, args, vars, span }))
+    pub fn read_data_decl(&mut self) -> Option<Decl> {
+        let res = self.spanned(|p| {
+            p.read_token(Token::Data)?;
+            let name = p.read_cap_ident()?;
+            let args = p.many(|p| p.read_ident());
+            p.read_token(Token::Equal)?;
+            let vars = p.sep_by1(
+                |p| p.spanned(|p| p.read_varient()),
+                |p| p.read_token(Token::Bar))?;
+            p.peek_decl_end()?;
+            Some(DataDecl{ name, args, vars })
+        })?;
+        Some(Decl::Data(res))
     }
 
     pub fn read_varient(&mut self) -> Option<Variant> {
@@ -345,17 +350,17 @@ impl<'src> Parser<'src> {
         Some(Variant{ cons, args })
     }
 
-    pub fn read_type_decl(&mut self) -> Option<DeclKind> {
-        let first = self.span();
-        self.read_token(Token::Type)?;
-        let name = self.read_cap_ident()?;
-        let args = self.many(|p| p.read_ident());
-        self.read_token(Token::Equal)?;
-        let typ = self.read_type()?;
-        self.peek_decl_end()?;
-        let last = self.span();
-        let span = Range { start: first.start, end: last.end };
-        Some(DeclKind::Type(TypeDecl{ name, args, typ, span }))
+    pub fn read_type_decl(&mut self) -> Option<Decl> {
+        let res = self.spanned(|p| {
+            p.read_token(Token::Val)?;
+            let name = p.read_cap_ident()?;
+            let args = p.many(|p| p.read_ident());
+            p.read_token(Token::Equal)?;
+            let typ = p.read_type()?;
+            p.peek_decl_end()?;
+            Some(TypeDecl{ name, args, typ })
+        })?;
+        Some(Decl::Type(res))
     }
 
     pub fn read_pattern(&mut self) -> Option<Pattern> {
@@ -365,7 +370,7 @@ impl<'src> Parser<'src> {
             // construtor without arguments
             { |p| p.read_pat_single_cons() },
             { |p| p.read_pat_app() },
-            { |p| p.read_pat_wild() },
+            // { |p| p.read_pat_wild() },
         ])
     }
 
@@ -387,7 +392,8 @@ impl<'src> Parser<'src> {
     pub fn read_pat_app(&mut self) -> Option<Pattern> {
         self.read_token(Token::LParen)?;
         let cons = self.read_cap_ident()?;
-        let args = self.many(|p| p.read_pattern());
+        let args = self.many(|p| p
+            .spanned(|p| p.read_pattern()));
         self.read_token(Token::RParen)?;
         Some(Pattern::App(cons, args))
     }

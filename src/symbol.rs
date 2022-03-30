@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt;
+use std::fmt::{self, Write};
 
 
 const BUILTIN: [&'static str; 11] = [
@@ -36,6 +36,7 @@ pub enum Symbol {
     Var(usize),
     Gen(usize),
     Forall(usize),
+    //Wild,
 }
 
 impl Symbol {
@@ -108,7 +109,8 @@ impl fmt::Debug for Symbol {
             &Symbol::Gen(n) => write!(f, "#{}", n),
             &Symbol::Forall(n) => write!(f,"{}",
                 "abcdefghijklmnopqrstuvwxyz".to_string().chars().nth(n).unwrap()
-            )
+            ),
+            //&Symbol::Wild => write!(f, "_")
         }
     }
 }

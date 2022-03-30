@@ -1,24 +1,28 @@
 use logos::Span;
 use crate::symbol::*;
+use crate::utils::*;
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Lit(LitValue),
     Var(Symbol),
     Cons(Symbol),
-    Lam(Symbol, Box<Expr>),
-    App(Box<Expr>, Box<Expr>),
-    Let(Vec<DeclKind>,Box<Expr>),
-    Case(Box<Expr>, Vec<Rule>),
-    Ifte(Box<Expr>, Box<Expr>, Box<Expr>),
+    Lam(Vec<Symbol>, Spanned<Expr>),
+    App(Vec<Spanned<Expr>>),
+    Let(Vec<Spanned<Decl>>,Spanned<Expr>),
+    Case(Spanned<Expr>, Vec<Spanned<Rule>>),
+    Ifte(Spanned<Expr>, Spanned<Expr>, Spanned<Expr>),
+    //Do(Vec<Statment>,Spanned<Expr>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Type {
     Lit(LitType),
     Var(Symbol),
+    Cons(Symbol),
+    App(Vec<Spanned<Type>>, Box<Type>),
     Arr(Box<Type>, Box<Type>),
-    // Con(Symbol),
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
@@ -38,9 +42,10 @@ pub enum LitType {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Variant {
-    pub cons: Symbol,
-    pub args: Vec<Type>,
+pub enum Decl {
+    Val(Spanned<ValDecl>),
+    Data(Spanned<DataDecl>),
+    Type(Spanned<TypeDecl>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -48,15 +53,19 @@ pub struct ValDecl {
     pub name: Symbol,
     pub args: Vec<Symbol>,
     pub body: Expr,
-    pub span: Span,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DataDecl {
     pub name: Symbol,
     pub args: Vec<Symbol>,
-    pub vars: Vec<Variant>,
-    pub span: Span,
+    pub vars: Vec<Spanned<Variant>>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Variant {
+    pub cons: Symbol,
+    pub args: Vec<Type>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -64,20 +73,20 @@ pub struct TypeDecl {
     pub name: Symbol,
     pub args: Vec<Symbol>,
     pub typ: Type,
-    pub span: Span,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum DeclKind {
-    Val(ValDecl),
-    Data(DataDecl),
-    Type(TypeDecl),
+/*
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+pub struct Row<T> {
+    pub label: Symbol,
+    pub data: T,
 }
+*/
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Pattern {
     /// Algebraic datatype constructor, along with binding pattern
-    App(Symbol, Vec<Pattern>),
+    App(Symbol, Vec<Spanned<Pattern>>),
     /// Constant
     Lit(LitValue),
     /// List pattern [pat1, ... patN]
@@ -86,17 +95,23 @@ pub enum Pattern {
     // Record(Vec<Row<Pat>>, bool),
     /// Variable binding
     Var(Symbol),
-    /// Wildcard
     Wild,
 }
 
 /// Rule of a case expression
 #[derive(Clone, Debug, PartialEq)]
 pub struct Rule {
-    pub pat: Pattern,
-    pub expr: Expr,
-    pub span: Span,
+    pub pat: Spanned<Pattern>,
+    pub expr: Spanned<Expr>,
 }
+
+/*
+#[derive(Clone, Debug, PartialEq)]
+pub enum Statment {
+    Assign(Symbol,Expr),
+    Ignore(Expr),
+}
+*/
 
 /*
 /// Interestingly, MLton immediately desugars tuples during parsing, rather than

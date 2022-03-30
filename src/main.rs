@@ -5,7 +5,7 @@ pub mod pretty;
 pub mod lexer;
 pub mod parser;
 pub mod check;
-pub mod infer;
+//pub mod infer;
 pub mod repl;
 
 fn main() {

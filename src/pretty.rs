@@ -8,102 +8,6 @@ use std::rc::Rc;
 use crate::symbol::*;
 use crate::ast::*;
 
-/*
-pub trait Pretty<S> {
-    fn print(&self, f: &mut fmt::Formatter, state: &mut S) -> fmt::Result;
-}
-
-//type Printer<T,S> = fn(&T,&mut S,&mut fmt::Formatter) -> fmt::Result;
-
-pub struct PrintState<'src> {
-    indent: usize,
-    indent_stack: Vec<usize>,
-    width: usize,
-    max_width: usize,
-    table: SymTable<'src>,
-}
-
-
-impl<'src> Pretty<PrintState<'src>> for Command {
-    fn print(&self, f: &mut fmt::Formatter,
-        state: &mut PrintState<'src>) -> fmt::Result {
-       
-        match self {
-            Command::Indent(w) => {
-                state.indent += w;
-            }
-            Command::Dedent(w) => {
-                state.indent -= w;
-            }
-            Command::Wrap(w) => {
-                {}
-            }
-            Command::Unwrap => {
-                {}
-            }
-            Command::Line => {
-                write!(f, "{}", '\n')?;
-                for _ in 0..state.indent {
-                    write!(f, "{}", ' ')?;
-                }
-            }
-            Command::Text(s) => {
-                state.width += s.len();
-                if state.width  >= state.max_width {
-                    Command::Line.print(state,f)?;
-                    state.width = state.indent + s.len();
-                }
-                write!(f, "{}", s)?;
-            }
-        }            
-        Ok(())
-    }
-}
-
-
-pub fn pretty_print<S>(f:&mut fmt::Formatter, s: &mut S,
-    p: &dyn Pretty<S>) -> fmt::Result {
-
-    p.print(f, s)?;
-    Ok(())
-}
-
-
-pub fn pretty_print<S>(f:&mut fmt::Formatter, s: &mut S,
-    ps: Vec<&dyn Pretty<S>>) -> fmt::Result {
-
-    for p in ps {
-        p.print(f, s)?;
-    }
-    Ok(())
-}
-
-pub fn nested<S>(f:&mut fmt::Formatter, s: &mut S,
-    ps: Vec<&dyn Pretty<S>>) -> fmt::Result {
-
-    
-
-    for p in ps {
-        p.print(f, s)?;
-    }
-    Ok(())
-}
-
-#[macro_export]
-macro_rules! pretty_print {
-    ( $f:expr, $s:expr, $( $p:expr ),* ) => {
-        {
-            || {
-                $(
-                    p.print(f,s)?;
-                )*
-            } ()
-        }
-    };
-}
-
-*/
-
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 enum Command {
     Indent(usize),
@@ -238,7 +142,17 @@ impl<'src> PrettyPrinter<'src> {
         self
     }
 
-    pub fn print_many<T: Print,D: Print>(&mut self, vec: &Vec<T>, delim: &D) -> &mut Self {
+    pub fn print_many<T: Print,D: Display>(&mut self, vec: &Vec<T>, delim: &D) -> &mut Self {
+        if !vec.is_empty() {
+            vec[0].print(self);
+            for elem in &vec[1..] {
+                delim.print(self);
+                elem.print(self);
+            }
+        }
+        self
+    }
+    pub fn print_many_ref<T: Deref<Target = U>,U: Print,D: Display>(&mut self, vec: &Vec<T>, delim: &D) -> &mut Self {
         if !vec.is_empty() {
             vec[0].print(self);
             for elem in &vec[1..] {
@@ -300,19 +214,18 @@ impl Print for Expr {
             Expr::Var(x) => {
                 x.print(pp);
             }
-            Expr::Lam(x, e) => {
+            Expr::Lam(xs, body) => {
                 pp
                 .text("fn ")
-                .print(x)
+                .print_many(xs, &' ')
                 .text(" => ")
-                .print(e.deref());
+                .print(body.deref());
             }
-            Expr::App(e1, e2) => {
-                pp.text("(");
-                e1.print(pp);
-                pp.text(" ");
-                e2.print(pp);
-                pp.text(")");
+            Expr::App(exprs) => {
+                pp
+                .text("(")
+                .print_many_ref(exprs, &' ')
+                .text(")");
             }
             _ => {
                 pp.text("???");
@@ -321,46 +234,61 @@ impl Print for Expr {
     }
 }
 
-impl Print for DeclKind {
+impl Print for ValDecl {
+    fn print(&self, pp: &mut PrettyPrinter) {
+        let ValDecl { name, args, body } = self;
+        pp
+        .text("val ")
+        .print(name)
+        .print_many(args,&' ')
+        .text(" = ")
+        .print(body);
+    }
+}
+
+impl Print for DataDecl {
+    fn print(&self, pp: &mut PrettyPrinter) {
+        let DataDecl { name, args, vars } = self;
+        pp
+        .text("data ")
+        .print(name)
+        .print_many(args,&' ')
+        .text(" = ")
+        .print_many_ref(vars, &'|');
+    }
+}
+
+impl Print for TypeDecl {
+    fn print(&self, pp: &mut PrettyPrinter) {
+        let TypeDecl { name, args, typ } = self;
+        pp
+        .text("type ")
+        .print(name)
+        .print_many(args,&' ')
+        .text(" = ")
+        .print(typ);
+    }
+}
+
+
+impl Print for Decl {
     fn print(&self, pp: &mut PrettyPrinter) {
         match self {
-            DeclKind::Val(ValDecl { name,args,body,span}) => {
-                pp
-                .text("val ")
-                .print(name)
-                .print_many(args,&" ".to_string())
-                .text(" = ")
-                .print(body);
-            }
-            DeclKind::Data(DataDecl { name,args,vars,span}) => {
-                pp
-                .text("data ")
-                .print(name)
-                .print_many(args,&" ".to_string())
-                .text(" = ")
-                .print_many(vars, &"|".to_string());
-            }
-            DeclKind::Type(TypeDecl { name,args,typ,span}) => {
-                pp
-                .text("type ")
-                .print(name)
-                .print_many(args,&" ".to_string())
-                .text(" = ")
-                .print(typ);
-            }
-
+            Decl::Val(val) => { pp.print(val.deref()); }
+            Decl::Data(data) => { pp.print(data.deref()); }
+            Decl::Type(typ) => { pp.print(typ.deref()); }
         }
     }
 }
 
 impl Print for Rule {
     fn print(&self, pp: &mut PrettyPrinter) {
-        let Rule { pat, expr, span } = self;
+        let Rule { pat, expr } = self;
         pp
         .text("| ")
-        .print(pat)
+        .print(pat.deref())
         .text(" => ")
-        .print(expr);
+        .print(expr.deref());
     }
 }
 
@@ -371,7 +299,7 @@ impl Print for Pattern {
                 pp
                 .text("(")
                 .print(cons)
-                .print_many(args, &" ".to_string())
+                .print_many_ref(args, &' ')
                 .text(")");
             }
             Pattern::Lit(lit) => {
@@ -398,7 +326,7 @@ impl Print for Variant {
         let Variant { cons, args } = self;
         pp
         .print(cons)
-        .print_many(args, &' '.to_string());
+        .print_many(args, &' ');
     }
 }
 
