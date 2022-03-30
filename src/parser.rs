@@ -352,7 +352,7 @@ impl<'src> Parser<'src> {
 
     pub fn read_type_decl(&mut self) -> Option<Decl> {
         let res = self.spanned(|p| {
-            p.read_token(Token::Val)?;
+            p.read_token(Token::Type)?;
             let name = p.read_cap_ident()?;
             let args = p.many(|p| p.read_ident());
             p.read_token(Token::Equal)?;

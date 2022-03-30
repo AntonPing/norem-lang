@@ -214,6 +214,9 @@ impl Print for Expr {
             Expr::Var(x) => {
                 x.print(pp);
             }
+            Expr::Cons(x) => {
+                x.print(pp);
+            }
             Expr::Lam(xs, body) => {
                 pp
                 .text("fn ")
@@ -227,8 +230,32 @@ impl Print for Expr {
                 .print_many_ref(exprs, &' ')
                 .text(")");
             }
-            _ => {
-                pp.text("???");
+            Expr::Let(decls, body) => {
+                pp
+                .text("let").line()
+                .nested(4, |p| 
+                    p.print_many_ref(decls, &'\n'))
+                .line().text("in").line()
+                .nested(4, |p| 
+                    p.print(body.deref()))
+                .text("end");
+            }
+            Expr::Ifte(cond, trbr, flbr) => {
+                pp
+                .text("if ")
+                .print(cond.deref())
+                .text("then ")
+                .print(trbr.deref())
+                .text("else")
+                .print(flbr.deref());
+            }
+            Expr::Case(expr, brs) => {
+                pp
+                .text("case ")
+                .print(expr.deref())
+                .text(" of").line()
+                .nested(4, |p| 
+                    p.print_many_ref(brs, &'\n'));
             }
         }
     }
@@ -254,7 +281,7 @@ impl Print for DataDecl {
         .print(name)
         .print_many(args,&' ')
         .text(" = ")
-        .print_many_ref(vars, &'|');
+        .print_many_ref(vars, &" | ");
     }
 }
 
