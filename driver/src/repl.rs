@@ -11,9 +11,9 @@ use rustyline::validate::{
 };
 use rustyline_derive::{Completer, Helper, Highlighter, Hinter};
 
-use crate::symbol::{self, SymTable};
-use crate::parser;
-use crate::pretty::{self, Print};
+use norem_frontend::symbol::{self, SymTable};
+use norem_frontend::parser;
+use norem_frontend::pretty::{self, Print};
 // use crate::infer;
 
 #[derive(Completer, Helper, Highlighter, Hinter)]

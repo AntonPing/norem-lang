@@ -1,19 +1,2 @@
 #V2
-adfasd
-(dfad\nsadfasdfsdsadfsa\ndafsadsdssddsdwe)
-fn x y => x y
-fn f x => f x
-fn f x => fx
-fn f x => f x
-fn f g x => (f x) (g x)
-fn f x => f x
-let data RGB = R 
-let data RGB = R | G | B in case 1 of R => 2 end
-case 1 of A => 1
-a
-let val x = 1 in x end
-let data RGB = R | G | B in case 1 of R => 2 end
-let data RGB = R | G | B in 1 end
-let data RGB = R | G | B in case 1 of R => 2 end
-let data RGB = R | G | B in 1 end
-let\n            val x = 42\n            data RGB = Red | Green | Blue\n            type Color = RGC\n        in\n            case color of\n            | Red => 1\n            | Green => 2\n            | Blue => 3\n        end
+sdafasd

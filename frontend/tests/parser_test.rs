@@ -1,7 +1,7 @@
 use std::{rc::Rc, cell::RefCell};
 
-use norem_lang::parser::*;
-use norem_lang::symbol::*;
+use norem_frontend::parser::*;
+use norem_frontend::symbol::*;
 
 #[test]
 pub fn parser_func() {
