@@ -12,7 +12,7 @@ use crate::ast::*;
 
 pub struct Parser<'src> {
     lexer: Lexer<'src,Token>,
-    table: Rc<RefCell<SymTable<'src>>>,
+    table: Rc<RefCell<SymTable>>,
     // for caching lexed tokens, spans, and slices
     stack: Vec<(Token,Span,&'src str)>,
     // since we sometimes backtracks
@@ -24,7 +24,7 @@ type Parsing<T> = fn(&mut Parser) -> Option<T>;
 impl<'src> Parser<'src> {
     pub fn new(
         input: &'src str,
-        table: Rc<RefCell<SymTable<'src>>>
+        table: Rc<RefCell<SymTable>>
     ) -> Parser<'src> {
         Parser { 
             lexer: Lexer::new(input),

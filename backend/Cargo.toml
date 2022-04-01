@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 norem-frontend = { path = "../frontend" }
+
+hashbag = "0.1.5"

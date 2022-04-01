@@ -19,19 +19,19 @@ enum Command {
 }
 
 //#[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub struct PrettyPrinter<'src> {
+pub struct PrettyPrinter {
     indent: usize,
     width: usize,
     max_width: usize,
-    table: Rc<RefCell<SymTable<'src>>>,
+    table: Rc<RefCell<SymTable>>,
     commands: VecDeque<Command>,
 }
 
-impl<'src> PrettyPrinter<'src> {
+impl PrettyPrinter {
     pub fn new(
         max: usize,
-        table: Rc<RefCell<SymTable<'src>>>
-    ) -> PrettyPrinter<'src> {
+        table: Rc<RefCell<SymTable>>
+    ) -> PrettyPrinter {
 
         PrettyPrinter {
             indent: 0,
@@ -92,7 +92,7 @@ impl<'src> PrettyPrinter<'src> {
     }
 
     pub fn wrapped<F>(&mut self, width: usize, body: F) -> &mut Self
-    where F: for<'a> Fn(&'a mut PrettyPrinter<'src>) -> &'a mut PrettyPrinter<'src> {
+    where F: for<'a> Fn(&'a mut PrettyPrinter) -> &'a mut PrettyPrinter {
         self.commands.push_back(Command::Wrap(width));
         body(self);
         self.commands.push_back(Command::Unwrap);
@@ -100,7 +100,7 @@ impl<'src> PrettyPrinter<'src> {
     }
 
     pub fn nested<F>(&mut self, width: usize, body: F) -> &mut Self
-    where F: for<'a> Fn(&'a mut PrettyPrinter<'src>) -> &'a mut PrettyPrinter<'src> {
+    where F: for<'a> Fn(&'a mut PrettyPrinter) -> &'a mut PrettyPrinter {
         self.commands.push_back(Command::Indent(width));
         body(self);
         self.commands.push_back(Command::Dedent(width));
@@ -118,7 +118,7 @@ impl<'src> PrettyPrinter<'src> {
     }
 
     pub fn surrounded<F>(&mut self, left: F, body: F, right: F) -> &mut Self
-    where F: for<'a> Fn(&'a mut PrettyPrinter<'src>) -> &'a mut PrettyPrinter<'src> {
+    where F: for<'a> Fn(&'a mut PrettyPrinter) -> &'a mut PrettyPrinter {
         left(self);
         body(self);
         right(self);
@@ -126,7 +126,7 @@ impl<'src> PrettyPrinter<'src> {
     }
 
     pub fn seperated<F>(&mut self, vec: Vec<F>, delim: F) -> &mut Self
-    where F: for<'a> Fn(&'a mut PrettyPrinter<'src>) -> &'a mut PrettyPrinter<'src> {
+    where F: for<'a> Fn(&'a mut PrettyPrinter) -> &'a mut PrettyPrinter {
         if !vec.is_empty() {
             vec[0](self);
             for elem in &vec[1..] {

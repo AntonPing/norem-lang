@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt::{self, Write};
+use std::fmt;
 
 
 const BUILTIN: [&'static str; 11] = [
@@ -48,18 +48,18 @@ impl Symbol {
 }
 
 
-#[derive(Clone, PartialEq)]
-pub struct SymTable<'src> {
+#[derive(Clone, Debug, PartialEq)]
+pub struct SymTable {
     // for symb to int
-    sym_map: HashMap<&'src str, usize>,
+    sym_map: HashMap<String, usize>,
     // for int to symb
-    sym_vec: Vec<&'src str>,
+    sym_vec: Vec<String>,
     // number of generated symbol
     gensym_idx : usize,
 }
 
-impl<'src> SymTable<'src> {
-    pub fn new() -> SymTable<'src> {
+impl SymTable {
+    pub fn new() -> SymTable {
         let mut table = SymTable::with_capacity(256);
         for sym in BUILTIN {
             table.newsym(sym);
@@ -67,7 +67,7 @@ impl<'src> SymTable<'src> {
         table
     }
     
-    pub fn with_capacity(n: usize) -> SymTable<'src> {
+    pub fn with_capacity(n: usize) -> SymTable {
         SymTable {
             sym_map: HashMap::with_capacity(n),
             sym_vec: Vec::with_capacity(n),
@@ -75,13 +75,13 @@ impl<'src> SymTable<'src> {
         }
     }
 
-    pub fn newsym(&mut self, s: &'src str) -> Symbol {
+    pub fn newsym(&mut self, s: &str) -> Symbol {
         if let Some(sym) = self.sym_map.get(s) {
             return Symbol::Var(*sym);
         } else {
             let len = self.sym_vec.len();
-            self.sym_map.insert(s, len);
-            self.sym_vec.push(s);
+            self.sym_map.insert(s.to_string(), len);
+            self.sym_vec.push(s.to_string());
             Symbol::Var(len)
         }
     }
@@ -92,13 +92,13 @@ impl<'src> SymTable<'src> {
         Symbol::Gen(self.gensym_idx)
     }
 
-    pub fn get(&self, s: &'src str) -> Option<Symbol> {
+    pub fn get(&self, s: &str) -> Option<Symbol> {
         let idx = self.sym_map.get(s)?;
         Some(Symbol::Var(*idx))
     }
 
-    pub fn get_str(&self, idx: usize) -> Option<&'src str> {
-        self.sym_vec.get(idx).map(|s|*s)
+    pub fn get_str(&self, idx: usize) -> Option<String> {
+        self.sym_vec.get(idx).map(|s| s.clone())
     }
 }
 

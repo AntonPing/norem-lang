@@ -13,11 +13,12 @@ use crate::ast::*;
 
 
 pub struct Checker<'src> {
+    source: &'src str,
     var_env: HashBag<Symbol>,
     data_env: HashBag<Symbol>,
     cons_env: HashBag<Symbol>,
     type_env: HashBag<Symbol>,
-    table: Rc<RefCell<SymTable<'src>>>,
+    table: Rc<RefCell<SymTable>>,
 }
 
 pub fn check_unique(xs: &Vec<Symbol>) -> bool {
