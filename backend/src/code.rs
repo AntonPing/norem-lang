@@ -76,18 +76,29 @@ impl LamLifter {
         self.table.borrow_mut().gensym()
     }
 
-    pub fn supercomb(&mut self, mut args: Vec<Symbol>, mut body: CombExpr) -> CombExpr {
-        let var = self.newvar();
+    pub fn supercomb(&mut self, args: &Vec<Symbol>, body: CombExpr) -> CombExpr {
+        let mut vec = Vec::new();
 
         for x in self.env.iter() {
-            args.insert(0, *x);
-            body = CombExpr::App(
-                Rc::new(body),
-                Rc::new(CombExpr::Var(*x)));
+            vec.push(*x);
         }
 
-        self.bind.insert(var,Rc::new(CombExpr::Comb(args, Rc::new(body))));
-        CombExpr::Glob(var)
+        for x in args {
+            vec.push(*x);
+        }
+
+        let var = self.newvar();
+
+        self.bind.insert(var,
+            Rc::new(CombExpr::Comb(vec, Rc::new(body))));
+
+        let mut res = CombExpr::Var(var);
+        for x in self.env.iter() {
+            res = CombExpr::App(
+                Rc::new(res),
+                Rc::new(CombExpr::Var(*x)));
+        } 
+        res
     }
     
     pub fn lambda_lift(&mut self, lexp: &LamExpr) -> CombExpr {
@@ -107,9 +118,8 @@ impl LamLifter {
                 self.is_top = old;
 
                 if old {
-                    
-                    
-                    self.supercomb(args, body)
+                    let args = lexp.get_args();
+                    self.supercomb(&args, body)
                 } else {
                     body
                 }
