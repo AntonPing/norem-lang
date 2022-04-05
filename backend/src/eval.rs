@@ -7,20 +7,19 @@ use norem_frontend::symbol::*;
 
 use crate::code::*;
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum Object {
     App(Rc<Object>,Rc<Object>),
     Int(i64),
+    Bool(bool),
     Ptr(usize),
     Null,
 }
 
 pub struct Machine {
     stack: Vec<Object>,
-    stack_top: Object,
     frame: Vec<Object>,
-    frame_top: Object,
-    regs: [Object;256],
-    reg_len: u8,
+    base: usize,
     code: Vec<ByteCode>,
     ip: usize,
 }
@@ -28,31 +27,69 @@ pub struct Machine {
 
 impl Machine {
     pub fn push(&mut self, obj: Object) {
-        self.stack.push(self.stack_top);
-        self.stack_top = obj;
+        self.stack.push(obj);
 
     }
-    pub fn pop(&mut self, reg: usize) {
-        self.regs[reg] = self.stack_top;
-        self.stack_top = self.stack.pop().unwrap();
+    pub fn pop(&mut self) -> Object {
+        self.stack.pop().unwrap()
     }
-    pub fn push_reg(&mut)
-
 
     pub fn eval(&mut self) {
         loop {
             match self.code[self.ip] {
                 ByteCode::App => {
-                    let e2 = self
-
-                    self.ip += 1;
+                    let e1 = self.pop();
+                    let e2 = self.pop();
+                    let app = Object::App(Rc::new(e1), Rc::new(e2));
+                    self.push(app);
                 }
+                ByteCode::Push(n) => {
+                    let len = self.frame.len();
+                    let obj = self.frame[len - n].clone();
+                    self.push(obj);
+                }
+                ByteCode::Pop(n) => {
+                    let len = self.frame.len();
+                    let obj =  self.pop();
+                    self.frame[len - n] = obj;
+                }
+                ByteCode::Jump(adr) => {
+                    self.ip = adr;
+                    continue;
+                }
+                ByteCode::JumpTrue(adr) => {
+                    if let Object::Bool(p) = self.pop() {
+                        if p {
+                            self.ip = adr;
+                            continue;
+                        }
+                    } else {
+                        panic!("need bool!");
+                    }
+                }
+                ByteCode::JumpFalse(adr) => {
+                    if let Object::Bool(p) = self.pop() {
+                        if !p {
+                            self.ip = adr;
+                            continue;
+                        }
+                    } else {
+                        panic!("need bool!");
+                    }
+                }
+                ByteCode::GlobCall(_) => {
+                    panic!("this should not appear in the compiled code!");
+                }
+                ByteCode::Call(adr) => {
+                    
+                }
+
                 _ => {
                     unimplemented!()
                 }
             }
 
-            
+            self.ip += 1;
         }
     }
 }

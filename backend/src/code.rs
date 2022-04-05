@@ -1,50 +1,56 @@
-use std::{rc::Rc, collections::HashMap, ops::Deref, cell::RefCell};
+use std::rc::Rc;
+use std::collections::HashMap;
 
-use norem_frontend::symbol::{*, SymTable};
-use hashbag::HashBag;
+use norem_frontend::symbol::*;
+
+#[derive(Copy,Clone, Debug, PartialEq)]
+pub enum Prim {
+    IAdd,
+    ISub,
+    IMul,
+    IDiv,
+    INeg,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum LamExpr {
+    Lit(Value),
     Var(Symbol),
-    Lam(Symbol,Rc<LamExpr>),
-    App(Rc<LamExpr>,Rc<LamExpr>),
-    Int(i64),
-    Add,
+    Lam(Vec<Symbol>,Rc<LamExpr>),
+    App(Rc<LamExpr>,Vec<Rc<LamExpr>>),
+    Record(Vec<LamExpr>),
+    Select(usize,Rc<LamExpr>),
+    Prim(Prim),
 }
 
-impl LamExpr {
-    pub fn get_args(&self) -> Vec<Symbol> {
-        let mut args = Vec::new();
-        let mut with = self;
-        while let LamExpr::Lam(x, e) = with {
-            args.push(*x);
-            with = e;
-        }
-        args
-    }
+
+#[derive(Copy,Clone, Debug, PartialEq)]
+pub enum Value {
+    //Var(Symbol),
+    //Label(Symbol),
+    Int(i64),
+    Real(f64),
+    Bool(bool),
+    //MetaVar(Symbol),
+    //Func(Symbol,Rc<CpsExpr>),
+}
+
+type TopDecl = HashMap<Symbol,SuperComb>;
+
+pub struct SuperComb {
+    name: Symbol,
+    args: Vec<Symbol>,
+    body: Rc<CombExpr>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum CombExpr {
-    Var(Symbol),
+    Lit(Value),
+    Arg(Symbol),
     Glob(Symbol),
-    Comb(Vec<Symbol>,Rc<CombExpr>),
-    App(Rc<CombExpr>, Rc<CombExpr>),
-    Int(i64),
-    Add,
+    App(Rc<CombExpr>, Vec<Rc<CombExpr>>),
+    Prim(Prim),
 }
-
-
-/*
-impl CombExpr {
-    pub fn dump_code(&self) -> Vec<ByteCode> {
-        let mut code = Vec::new();
-        
-
-    }
-}
-*/
-
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ByteCode {

@@ -9,12 +9,10 @@ use norem_frontend::symbol::*;
 
 use crate::code::*;
 
-
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct LamLifter {
     table: Rc<RefCell<SymTable>>,
-    bind: HashMap<Symbol,Rc<CombExpr>>,
+    bind: HashMap<Symbol,CombExpr>,
     env: HashBag<Symbol>, // the symbol walked
     is_top: bool,
 }
