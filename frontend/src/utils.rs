@@ -153,7 +153,6 @@ pub fn lit_value_type(val: LitValue) -> LitType {
     }
 }
 
-
 pub fn unfold_lam(expr: &Expr) -> (Vec<&Symbol>,&Expr) {
     unimplemented!()
 }
