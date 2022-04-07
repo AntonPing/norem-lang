@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::net::ToSocketAddrs;
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -21,19 +20,18 @@ pub struct Checker<'src> {
     table: Rc<RefCell<SymTable>>,
 }
 
-pub fn check_unique(xs: &Vec<Symbol>) -> bool {
+pub fn check_unique(xs: &Vec<Symbol>) -> Result<(),String> {
     let mut ys: Vec<Symbol> = Vec::new();
     for x in xs {
         for y in &ys {
             if x == y {
-                return false;
+                return Err("variables aren't unique!".to_string());
             }
         }
         ys.push(*x);
     }
-    true
+    Ok(())
 }
-
 
 impl<'src> Checker<'src> {
 
@@ -42,10 +40,9 @@ impl<'src> Checker<'src> {
     }
 
     pub fn env_delete(&mut self, x: Symbol) {
-        if let k = self.var_env.remove(&x) {
-            assert!(k >= 1);
-            self.var_env.insert_many(x, k - 1);
-        }
+        let k = self.var_env.remove(&x); 
+        assert!(k >= 1);
+        self.var_env.insert_many(x, k - 1);
     }
 
     pub fn env_extend_many(&mut self, xs: &Vec<Symbol>) {
@@ -56,14 +53,13 @@ impl<'src> Checker<'src> {
 
     pub fn env_delete_many(&mut self, xs: &Vec<Symbol>) {
         for x in xs {
-            if let k = self.var_env.remove(&x) {
-                assert!(k >= 1);
-                self.var_env.insert_many(*x, k - 1);
-            }
+            let k = self.var_env.remove(&x);
+            assert!(k >= 1);
+            self.var_env.insert_many(*x, k - 1);
         }
     }
 
-    pub fn var_lookup(&mut self, x: &Symbol) -> Result<(),String> {
+    pub fn var_lookup(&self, x: &Symbol) -> Result<(),String> {
         if self.var_env.contains(x) >= 1 {
             Ok(())
         } else {
@@ -82,6 +78,7 @@ impl<'src> Checker<'src> {
     pub fn check_val_decl(&mut self, decl: &ValDecl) -> Result<(),String> {
         let ValDecl { name, args, body } = decl;
         self.env_extend(*name);
+        check_unique(args)?;       
         self.env_extend_many(args);
         self.check_expr(body)?;
         self.env_delete_many(args);
@@ -91,18 +88,42 @@ impl<'src> Checker<'src> {
     pub fn check_data_decl(&mut self, decl: &DataDecl) -> Result<(),String> {
         let DataDecl { name, args, vars } = decl;
         self.env_extend(*name);
+        check_unique(args)?;
         self.env_extend_many(args);
-        //self.check_expr(body)?;
+        let constructors : Vec<Symbol> = vars
+            .iter()
+            .map(|x| x.cons)
+            .collect();
+        
+        check_unique(&constructors)?;
+        for var in vars {
+            self.check_varient(var.deref())?;
+        } 
+
         self.env_delete_many(args);
         Ok(())
     }
 
+    pub fn check_varient(&mut self, var: &Variant) -> Result<(),String> {
+        let Variant { cons, args } = var;
+        for arg in args {
+            self.check_type(&arg)?;    
+        }
+        Ok(())
+
+    }
+
     pub fn check_type_decl(&mut self, decl: &TypeDecl) -> Result<(),String> {
         let TypeDecl { name, args, typ } = decl;
+        self.env_extend(*name);
+        check_unique(args)?;
+        self.env_extend_many(args);
+        self.check_type(typ)?;
+        self.env_delete_many(args);
         Ok(())
     }
 
-    pub fn check_pattern(&mut self, pat: &Pattern) -> Result<(),String> {
+    pub fn start_pattern(&mut self, pat: &Pattern) -> Result<(),String> {
         match pat {
             Pattern::Lit(lit) => {
                 if let LitValue::Real(_) = lit {
@@ -112,7 +133,7 @@ impl<'src> Checker<'src> {
             Pattern::App(cons, args) => {
                 if let Some(_) = self.cons_env.get(&cons) {
                     for arg in args {
-                        self.check_pattern(arg)?;
+                        self.start_pattern(arg)?;
                     }
                     Ok(())
                 } else {
@@ -127,11 +148,6 @@ impl<'src> Checker<'src> {
                 Ok(())
             }
         }
-    }
-
-    pub fn start_pattern(&mut self, pat: &Pattern) {
-
-
     }
 
     pub fn end_pattern(&mut self, pat: &Pattern) {
@@ -158,7 +174,34 @@ impl<'src> Checker<'src> {
         Ok(())
     }
 
-    
+    pub fn check_type(&self, typ: &Type) -> Result<(),String> {
+        match typ {
+            Type::Var(x) => {
+                self.var_lookup(x)?;
+                Ok(())
+            }
+            Type::App(ta, tb) => {
+                self.check_type(ta)?;
+                self.check_type(tb)?;
+                Ok(())
+            }
+            Type::Arr(ta, tb) => {
+                self.check_type(ta)?;
+                self.check_type(tb)?;
+                Ok(())
+            }
+            Type::Cons(cons) => {
+                if self.cons_env.contains(cons) > 0 {
+                    Ok(())
+                } else {
+                    Err("Constructor not defined!".to_string())
+                } 
+            }
+            Type::Lit(lit) => {
+                Ok(())
+            }
+        }
+    }
 
     pub fn check_expr(&mut self, expr: &Expr) -> Result<(),String> {
         match expr {
@@ -167,9 +210,7 @@ impl<'src> Checker<'src> {
                 self.var_lookup(x)
             }
             Expr::Lam(xs, body) => {
-                if !check_unique(xs) {
-                    return Err("Same ident!".to_string());
-                }
+                check_unique(xs)?;
                 self.env_extend_many(xs);
                 self.check_expr(body)?;
                 self.env_delete_many(xs);

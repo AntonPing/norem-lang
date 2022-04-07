@@ -21,7 +21,7 @@ pub enum Type {
     Lit(LitType),
     Var(Symbol),
     Cons(Symbol),
-    App(Vec<Spanned<Type>>, Box<Type>),
+    App(Box<Type>, Box<Type>),
     Arr(Box<Type>, Box<Type>),
 }
 
