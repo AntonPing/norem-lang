@@ -266,7 +266,12 @@ impl<'src> Parser<'src> {
     pub fn read_app(&mut self) -> Option<Expr> {
         let exprs = self.many1(|p| p
             .spanned(|p| p.read_expr()))?;
-        Some(Expr::App(exprs))        
+        
+        if exprs.len() <= 1 {
+            None
+        } else {
+            Some(Expr::App(exprs[0], exprs[1..].to_vec()))
+        }
     }
 
     pub fn read_let(&mut self) -> Option<Expr> {
@@ -428,7 +433,7 @@ impl<'src> Parser<'src> {
         )?; 
 
         Some(tys.into_iter().reduce(
-            |t1,t2| Type::Arr(Box::new(t1), Box::new(t2))
+            |t1,t2| Type::Arr(Ptr(t1), Ptr(t2))
         ).unwrap())
     }
 

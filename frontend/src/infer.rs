@@ -11,56 +11,62 @@ use crate::parser::*;
 use crate::pretty::*;
 use crate::ast::*;
 
-type Subst = HashMap<Symbol,TypeVar>;
+type Subst = HashMap<Symbol,Type>;
 type VarSet = HashBag<Symbol>;
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum TypeVar {
-    Var(Symbol),
-    Arr(Box<TypeVar>,Box<TypeVar>),
-    Lit(LitType),
-}
-
-impl TypeVar {
-    fn new(ty: Type) -> TypeVar {
+impl Type {
+    fn new(ty: Type) -> Type {
         unimplemented!()
     }
     
     fn ftv(&self) -> VarSet {
         let mut result = HashBag::new();
-        let mut stack = Vec::<&TypeVar>::new();
+        let mut stack = Vec::<&Type>::new();
         stack.push(self);
 
         while let Some(elem) = stack.pop() {
             match elem {
-                TypeVar::Var(x) => {
+                Type::Lit(_) => {}
+                Type::Var(x) => {
                     result.insert(*x);
                 }
-                TypeVar::Lit(_) => {}
-                TypeVar::Arr(ty1,ty2) => {
+                Type::Arr(ty1,ty2) => {
                     stack.push(ty1);
                     stack.push(ty2);
+                }
+                Type::App(cons, args) => {
+                    for arg in args {
+                        stack.push(arg);
+                    }
                 }
             }
         }
         result
     }
 
-    fn subst(&self, sub: &Subst) -> TypeVar {
+    fn subst(&self, sub: &Subst) -> Type {
         match self {
-            TypeVar::Lit(_) => {
+            Type::Lit(_) => {
                 self.clone()
             }
-            TypeVar::Var(x) => {
+            Type::Var(x) => {
                 if let Some(t) = sub.get(&x) {
                     t.clone().subst(sub)
                 } else {
                     self.clone()
                 }
             }
-            TypeVar::Arr(t1,t2) => {
-                TypeVar::Arr(
-                    Box::new(t1.subst(sub)),Box::new(t2.subst(sub)))
+            Type::Arr(t1,t2) => {
+                Type::Arr(
+                    Ptr(t1.subst(sub)),
+                    Ptr(t2.subst(sub)))
+            }
+            Type::App(cons, args) => {
+                let new_args = args
+                    .iter()
+                    .map(|arg| Ptr(arg.subst(sub)))
+                    .collect();
+                Type::App(*cons, new_args)
             }
         }
     }
@@ -71,8 +77,8 @@ impl TypeVar {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Scheme {
-    Mono(TypeVar),
-    Poly(usize,TypeVar),
+    Mono(Type),
+    Poly(usize,Type),
 }
 
 impl Scheme {
@@ -90,66 +96,6 @@ impl Scheme {
     }
 }
 
-
-struct Constraints {
-    cons: Vec<(TypeVar,TypeVar)>,
-}
-
-impl Constraints {
-    fn new() -> Constraints {
-        Constraints { cons: Vec::new() }
-    }
-    fn push(&mut self, t1: &TypeVar, t2: &TypeVar) {
-        self.cons.push((t1.clone(),t2.clone()));
-    }
-    fn solve(&mut self) -> Result<Subst,String> {
-        let mut map = HashMap::new();
-        while let Some((ty1,ty2)) = self.cons.pop() {
-            let ty1 = ty1.subst(&map);
-            let ty2 = ty2.subst(&map);
-            match (&ty1,&ty2) {
-                (TypeVar::Var(x), _) => {
-                    if ty2.occur_check(&x) {
-                        return Err("Occur check failed!".to_string());
-                    } else {
-                        map.insert(*x, ty2);
-                    }
-                }
-                (_, TypeVar::Var(x)) => {
-                    if ty1.occur_check(&x) {
-                        return Err("Occur check failed!".to_string());
-                    } else {
-                        map.insert(*x, ty1);
-                    }
-                }
-                (TypeVar::Lit(a), TypeVar::Lit(b)) => {
-                    if a == b {
-                        continue;
-                    } else {
-                        return Err(format!("Can't unify {:?} and {:?}!",a,b));
-                    }
-                }
-                (&TypeVar::Arr(_,_), &TypeVar::Arr(_,_)) => {
-
-                    match (ty1, ty2) {
-                        (TypeVar::Arr(a1,a2),
-                        TypeVar::Arr(b1,b2)) => {
-                        
-                            self.cons.push((*a1,*b1));
-                            self.cons.push((*a2,*b2));
-                        }
-                        _ => { unimplemented!() }
-                    }
-
-                }
-                (a,b) => {
-                    return Err(format!("Can't unify {:?} and {:?}!",a,b))
-                }
-            }
-        }
-        Ok(map)
-    }
-}
 
 #[derive(Clone, Debug, PartialEq)]
 enum EnvHistory {
@@ -267,52 +213,52 @@ impl Environment {
                     }
                 }
             } else {
-                panic!("Can't Be!")
+                panic!("history underflow!");
             }
         }
     }
 }
 
-pub struct Infer<'src> {
+pub struct Infer {
     env: Environment,
-    cons: Constraints,
-    table: Rc<RefCell<SymTable<'src>>>,
+    subst: Subst,
+    table: Mut<SymTable>,
     err_msg: Vec<String>,
 }
 
-impl<'src> Infer<'src> {
-    pub fn new(table: Rc<RefCell<SymTable<'src>>>) -> Infer<'src> {
+impl Infer {
+    pub fn new(table: Mut<SymTable>) -> Infer {
         Infer {
             env: Environment::new(),
-            cons: Constraints::new(),
-            table: table,
+            subst: HashMap::new(),
+            table,
             err_msg: Vec::new()
         }
     }
-
-    /*
-    fn update(&mut self, x: Symbol, sc: Scheme) -> Option<(Symbol,Scheme)> {
-        let old = self.env.insert(x, sc);
-        old.map(|sc| (x,sc))
-    }
-
-    fn recover(&mut self, record: Option<(Symbol,Scheme)>) {
-        if let Some((x,sc)) = record {
-            self.env.insert(x, sc);
-        }
-    }
-    */
 
     fn newvar(&mut self) -> Symbol {
         self.table.borrow_mut().gensym()
     }
 
-    fn generalize(&mut self, ty: &TypeVar) -> Scheme {
+    fn update_subst(&mut self, key: Symbol, value: Type) {
+        let map = HashMap::new();
+        map.insert(key, value);
+
+        for (k,v) in self.subst {
+            let new_v = v.subst(&map);
+            self.subst.insert(k, new_v);
+        }
+
+        self.subst.insert(key, value);
+
+    }
+
+    fn generalize(&mut self, ty: &Type) -> Scheme {
         let mut sub = HashMap::new();
         let mut len = 0;
         for (x,_) in ty.ftv() {
             if !self.env.contains(x) {
-                sub.insert(x, TypeVar::Var(Symbol::Forall(len)));
+                sub.insert(x, Type::Var(Symbol::Forall(len)));
                 len += 1;
             } else {
                 dbg!(x);
@@ -324,26 +270,75 @@ impl<'src> Infer<'src> {
             Scheme::Poly(len, ty.subst(&sub))
         }
     }
-    fn instantiate(&mut self, sc: &Scheme) -> TypeVar {
+
+    fn instantiate(&mut self, sc: &Scheme) -> Type {
         match sc {
             Scheme::Mono(ty) => { ty.clone() }
             Scheme::Poly(n, ty) => {
                 let mut sub = HashMap::new();
                 for x in 0..*n {
-                    let new = TypeVar::Var(self.newvar());
+                    let new = Type::Var(self.newvar());
                     sub.insert(Symbol::Forall(x), new);
                 }
                 ty.subst(&sub)
             }
         }
     }
-    fn unify(&mut self, ty1: &TypeVar, ty2: &TypeVar) {
-        self.cons.push(ty1,ty2);
+
+    fn unify(&mut self, ty1: &Type, ty2: &Type) -> Result<(), String> {
+        match (ty1,ty2) {
+            (Type::Var(x), _) => {
+                if ty2.occur_check(&x) {
+                    Err("Occur check failed!".to_string())
+                } else {
+                    self.update_subst(*x, *ty2);
+                    self.subst.insert(*x, *ty2);
+                    Ok(())
+                }
+            }
+            (_, Type::Var(x)) => {
+                if ty1.occur_check(&x) {
+                    Err("Occur check failed!".to_string())
+                } else {
+                    self.update_subst(*x, *ty1);
+                    self.subst.insert(*x, *ty1);
+                    Ok(())
+                }
+            }
+            (Type::Lit(a), Type::Lit(b)) => {
+                if a != b {
+                    return Err(format!("Can't unify {:?} and {:?}!",a,b));
+                }
+                Ok(())
+            }
+            (Type::Arr(a1,a2),
+                Type::Arr(b1,b2)) => {
+
+                self.unify(a1.deref(), b1.deref())?;
+                self.unify(a2.deref(), b2.deref())?;
+                Ok(())
+            }
+            (Type::App(cons1,args1),
+                Type::App(cons2,args2)) => {
+                
+                if cons1 != cons2 {
+                    return Err(format!("diffent constructor {:?} {:?}!", cons1, cons2));
+                }
+
+                for (arg1, arg2) in args1.iter().zip(args2.iter()) {
+                    self.unify(arg1.deref(), arg2.deref())?;
+                }
+                Ok(())
+            }
+            (a,b) => {
+                Err(format!("Can't unify {:?} and {:?}!",a,b))
+            }
+        }
     }
-    fn infer(&mut self, expr: &Expr) -> Result<TypeVar,String> {
+    fn infer(&mut self, expr: &Expr) -> Result<Type,String> {
         match expr {
             Expr::Lit(lit) => {
-                Ok(TypeVar::Lit(lit_value_type(lit.clone())))
+                Ok(Type::Lit(lit_value_type(lit.clone())))
             }
             Expr::Var(sym) => {
                 match sym {
@@ -366,20 +361,46 @@ impl<'src> Infer<'src> {
                 }
                 
             }
-            Expr::Lam(x,e) => {
-                let x2 = TypeVar::Var(self.newvar());
-                let old = self.env.update(*x, Scheme::Mono(x2.clone()));
-                let t2 = self.infer(e)?;
-                self.env.recover(old);
+            Expr::Lam(args, body) => {
+                let old = self.env.backup();
                 
-                Ok(TypeVar::Arr(Box::new(x2),Box::new(t2)))
+                let vec = Vec::new();
+                
+                for arg in args {
+                    let new = Type::Var(self.newvar());
+                    vec.push(new);
+                    self.env.update(*arg, Scheme::Mono(new));
+                }
+
+                let body_typ = self.infer(body)?;
+
+                self.env.recover(old);
+
+                Ok(vec
+                    .iter().rev()
+                    .fold(body_typ, |iter, x| {
+                        Type::Arr(Ptr(*x), Ptr(iter))
+                    }))
+                
             }
-            Expr::App(ea,eb) => {
-                let ta = self.infer(ea)?;
-                let tb = self.infer(eb)?;
-                let tc = TypeVar::Var(self.newvar());
-                self.unify(&ta, &TypeVar::Arr(Box::new(tb),Box::new(tc.clone())));
-                Ok(tc)
+            Expr::App(func, args) => {
+                let tyf = self.infer(func)?;
+                
+                let mut tyargs = Vec::new();
+                for arg in args {
+                    let ty = self.infer(arg)?;
+                    tyargs.push(ty);
+                }
+
+                let tyres = Type::Var(self.newvar());
+
+                let tyfunc = tyargs.iter().rev()
+                    .fold(tyres, |iter, tyarg| {
+                        Type::Arr(Ptr(*tyarg),Ptr(iter))
+                    });
+                self.unify(&tyf, &tyfunc)?;
+                
+                Ok(tyres)
             },
             Expr::Let(decls, body) => {
                 let old = self.env.backup();
@@ -400,16 +421,16 @@ impl<'src> Infer<'src> {
         }
     }
 
-    fn infer_delc(&mut self, decl: &DeclKind) -> Result<(),String> {
+    fn infer_delc(&mut self, decl: &Decl) -> Result<(),String> {
         match decl {
-            DeclKind::Val(ValDecl{
-                name,args,body,span
+            Decl::Val(ValDecl{
+                name,args,body
             }) => {
 
                 let old = self.env.backup();
 
                 for arg in args {
-                    let new = TypeVar::Var(self.newvar());
+                    let new = Type::Var(self.newvar());
                     self.env.update(*arg, Scheme::Mono(new));
                 }
 

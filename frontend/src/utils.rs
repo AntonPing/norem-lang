@@ -1,28 +1,9 @@
 use crate::{ast::*, symbol::Symbol};
 
-use std::{fmt, ops::Deref};
-
-
-/*
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct Position {
-    pub line: usize,
-    pub col: usize,
-    pub abs: usize,
-}
-
-impl Position {
-    pub const fn new(line: usize, col: usize, abs: usize) -> Position {
-        Position { line, col, abs }
-    }
-}
-
-impl fmt::Display for Position {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:{}({})", self.line, self.col, self.abs)
-    }
-}
-*/
+use std::fmt::{Debug, Display, Formatter, self};
+use std::ops::Deref;
+use std::cell::RefCell;
+use std::rc::{Rc, Weak};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 /// A span in the source, with a start and end location
@@ -33,7 +14,7 @@ pub struct Span {
 
 impl Span {
     pub fn new(start: usize, end: usize) -> Span {
-        Span { start , end}
+        Span { start , end }
     }
     pub const fn zero() -> Span {
         Span {
@@ -43,7 +24,7 @@ impl Span {
     }
 }
 
-/// A Box with position message
+/// A Box with span position message
 pub struct Spanned<T> {
     pub data: Box<T>,
     pub span: Span,
@@ -62,7 +43,7 @@ impl<T> Spanned<T> {
         self.span
     }
 
-    pub fn map<S, F: FnMut(T) -> S>(self, mut f: F) -> Spanned<S> {
+    pub fn map<U, F: FnMut(T) -> U>(self, mut f: F) -> Spanned<U> {
         Spanned {
             data: Box::new(f(*self.data)),
             span: self.span,
@@ -89,7 +70,7 @@ impl<T: PartialOrd> PartialOrd for Spanned<T> {
     }
 }
 
-impl<T> std::ops::Deref for Spanned<T> {
+impl<T> Deref for Spanned<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         self.data.deref()
@@ -121,35 +102,93 @@ impl<T: Clone> Clone for Spanned<T> {
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for Spanned<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<T: Debug> Debug for Spanned<T> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         (*self.data).fmt(f)
     }
 }
 
-impl<T: fmt::Display> fmt::Display for Spanned<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<T: Display> Display for Spanned<T> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         (*self.data).fmt(f)
     }
 }
 
+//
+// Pointers
+//
 
-#[cfg(test)]
-mod test {
-    use super::*;
+pub type Ptr<T> = Rc<T>;
 
-    #[test]
-    fn spanned_size() {
-        //assert_eq!(std::mem::size_of::<Span>(), 16);
+#[allow(non_snake_case)]
+pub fn Ptr<T>(val: T) -> Ptr<T> {
+    Ptr::new(val)
+}
+
+
+pub struct Mut<T>(Rc<RefCell<T>>);
+pub struct MutWeak<T>(Weak<RefCell<T>>);
+
+impl<T> Mut<T> {
+    pub fn new(val: T) -> Mut<T> {
+        Mut(Rc::new(RefCell::new(val)))
+    }
+
+    pub fn weak(&self) -> MutWeak<T> {
+        MutWeak(Rc::downgrade(&self.0))
+    }
+
+    pub fn take_inner(this: Self) -> Result<T, Mut<T>> {
+        Rc::try_unwrap(this.0).map(|x| x.into_inner()).map_err(Mut)
     }
 }
 
-pub fn lit_value_type(val: LitValue) -> LitType {
-    match val {
-        LitValue::Bool(_) => LitType::Bool,
-        LitValue::Char(_) => LitType::Char,
-        LitValue::Int(_) => LitType::Int,
-        LitValue::Real(_) => LitType::Real,
+impl<T> Deref for Mut<T> {
+    type Target = Rc<RefCell<T>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> Deref for MutWeak<T> {
+    type Target = Weak<RefCell<T>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> Clone for Mut<T> {
+    fn clone(&self) -> Self {
+        Mut(self.0.clone())
+    }
+}
+
+impl<T> Debug for Mut<T>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.borrow().fmt(f)
+    }
+}
+
+impl<T> std::fmt::Display for Mut<T>
+where
+    T: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&*self.0.borrow(), f)
+    }
+}
+
+impl<T> Debug for MutWeak<T>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 

@@ -142,6 +142,11 @@ impl PrettyPrinter {
         self
     }
 
+    pub fn print_ref<T: Deref<Target = U>, U: Print>(&mut self, t: &T) -> &mut Self {
+        t.print(self);
+        self
+    }
+
     pub fn print_many<T: Print,D: Display>(&mut self, vec: &Vec<T>, delim: &D) -> &mut Self {
         if !vec.is_empty() {
             vec[0].print(self);
@@ -224,10 +229,12 @@ impl Print for Expr {
                 .text(" => ")
                 .print(body.deref());
             }
-            Expr::App(exprs) => {
+            Expr::App(func, args) => {
                 pp
                 .text("(")
-                .print_many_ref(exprs, &' ')
+                .print_ref(func)
+                .text(" ")
+                .print_many_ref(args, &' ')
                 .text(")");
             }
             Expr::Let(decls, body) => {

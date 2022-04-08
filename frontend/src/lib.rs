@@ -5,3 +5,4 @@ pub mod pretty;
 pub mod lexer;
 pub mod parser;
 pub mod check;
+pub mod infer;

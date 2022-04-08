@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::hash::Hash;
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -6,18 +7,15 @@ use hashbag::HashBag;
 
 use crate::utils::*;
 use crate::symbol::*;
-use crate::parser::*;
-use crate::pretty::*;
 use crate::ast::*;
 
 
-pub struct Checker<'src> {
-    source: &'src str,
+pub struct Checker {
     var_env: HashBag<Symbol>,
-    data_env: HashBag<Symbol>,
+    //data_env: HashBag<Symbol>,
     cons_env: HashBag<Symbol>,
     type_env: HashBag<Symbol>,
-    table: Rc<RefCell<SymTable>>,
+    table: Mut<SymTable>,
 }
 
 pub fn check_unique(xs: &Vec<Symbol>) -> Result<(),String> {
@@ -30,28 +28,36 @@ pub fn check_unique(xs: &Vec<Symbol>) -> Result<(),String> {
         }
         ys.push(*x);
     }
-    Ok(())
+    Ok(())  
 }
 
-impl<'src> Checker<'src> {
+impl Checker {
+    pub fn new(table: Mut<SymTable>) -> Checker {
+        Checker {
+            var_env: HashBag::new(),
+            cons_env: HashBag::new(),
+            type_env: HashBag::new(),
+            table
+        }
+    }
 
-    pub fn env_extend(&mut self, x: Symbol) {
+    pub fn var_extend(&mut self, x: Symbol) {
         self.var_env.insert(x);
     }
 
-    pub fn env_delete(&mut self, x: Symbol) {
+    pub fn var_delete(&mut self, x: Symbol) {
         let k = self.var_env.remove(&x); 
         assert!(k >= 1);
         self.var_env.insert_many(x, k - 1);
     }
 
-    pub fn env_extend_many(&mut self, xs: &Vec<Symbol>) {
+    pub fn var_extend_many(&mut self, xs: &Vec<Symbol>) {
         for x in xs {
             self.var_env.insert(*x);
         }
     }
 
-    pub fn env_delete_many(&mut self, xs: &Vec<Symbol>) {
+    pub fn var_delete_many(&mut self, xs: &Vec<Symbol>) {
         for x in xs {
             let k = self.var_env.remove(&x);
             assert!(k >= 1);
@@ -59,7 +65,7 @@ impl<'src> Checker<'src> {
         }
     }
 
-    pub fn var_lookup(&self, x: &Symbol) -> Result<(),String> {
+    pub fn check_var_scope(&self, x: &Symbol) -> Result<(),String> {
         if self.var_env.contains(x) >= 1 {
             Ok(())
         } else {
@@ -69,27 +75,33 @@ impl<'src> Checker<'src> {
 
     pub fn check_decl(&mut self, decl: &Decl) -> Result<(),String> {
         match decl {
-            Decl::Val(val) => { self.check_val_decl(val) }
-            Decl::Data(data) => { self.check_data_decl(data) }
-            Decl::Type(typ) => { self.check_type_decl(typ) }
+            Decl::Val(val) => {
+                self.check_val_decl(val)
+            }
+            Decl::Data(data) => {
+                self.check_data_decl(data)
+            }
+            Decl::Type(typ) => {
+                self.check_type_decl(typ)
+            }
         }
     }
 
     pub fn check_val_decl(&mut self, decl: &ValDecl) -> Result<(),String> {
         let ValDecl { name, args, body } = decl;
-        self.env_extend(*name);
+        self.var_extend(*name);
         check_unique(args)?;       
-        self.env_extend_many(args);
+        self.var_extend_many(args);
         self.check_expr(body)?;
-        self.env_delete_many(args);
+        self.var_delete_many(args);
         Ok(())
     }
 
     pub fn check_data_decl(&mut self, decl: &DataDecl) -> Result<(),String> {
         let DataDecl { name, args, vars } = decl;
-        self.env_extend(*name);
+        self.var_extend(*name);
         check_unique(args)?;
-        self.env_extend_many(args);
+        self.var_extend_many(args);
         let constructors : Vec<Symbol> = vars
             .iter()
             .map(|x| x.cons)
@@ -100,7 +112,7 @@ impl<'src> Checker<'src> {
             self.check_varient(var.deref())?;
         } 
 
-        self.env_delete_many(args);
+        self.var_delete_many(args);
         Ok(())
     }
 
@@ -109,21 +121,62 @@ impl<'src> Checker<'src> {
         for arg in args {
             self.check_type(&arg)?;    
         }
+        self.cons_env.insert(*cons);
         Ok(())
 
     }
 
     pub fn check_type_decl(&mut self, decl: &TypeDecl) -> Result<(),String> {
         let TypeDecl { name, args, typ } = decl;
-        self.env_extend(*name);
+        self.type_env.insert(*name);
         check_unique(args)?;
-        self.env_extend_many(args);
+        self.var_extend_many(args);
         self.check_type(typ)?;
-        self.env_delete_many(args);
+        self.var_delete_many(args);
         Ok(())
     }
 
-    pub fn start_pattern(&mut self, pat: &Pattern) -> Result<(),String> {
+    pub fn free_decl(&mut self, decl: &Decl) -> Result<(),String> {
+        match decl {
+            Decl::Val(val) => {
+                self.free_val_decl(val)
+            }
+            Decl::Data(data) => {
+                self.free_data_decl(data)
+            }
+            Decl::Type(typ) => {
+                self.free_type_decl(typ)
+            }
+        }
+    }
+
+    pub fn free_val_decl(&mut self, decl: &ValDecl) -> Result<(),String> {
+        self.var_env.try_take(&decl.name);
+        Ok(())
+    }
+
+    pub fn free_data_decl(&mut self, decl: &DataDecl) -> Result<(),String> {
+        let DataDecl { name, args, vars } = decl;
+        self.type_env.try_take(name);
+
+        for var in vars {
+            self.free_varient(var);
+        }
+
+        Ok(())
+    }
+
+    pub fn free_type_decl(&mut self, decl: &TypeDecl) -> Result<(),String> {
+        self.type_env.try_take(&decl.name);
+        Ok(())
+    }
+
+    pub fn free_varient(&mut self, var: &Variant) -> Result<(),String> {
+        self.cons_env.try_take(&var.cons);
+        Ok(())
+    }
+
+    pub fn check_pattern(&mut self, pat: &Pattern) -> Result<(),String> {
         match pat {
             Pattern::Lit(lit) => {
                 if let LitValue::Real(_) = lit {
@@ -133,7 +186,7 @@ impl<'src> Checker<'src> {
             Pattern::App(cons, args) => {
                 if let Some(_) = self.cons_env.get(&cons) {
                     for arg in args {
-                        self.start_pattern(arg)?;
+                        self.check_pattern(arg)?;
                     }
                     Ok(())
                 } else {
@@ -141,7 +194,7 @@ impl<'src> Checker<'src> {
                 }
             }
             Pattern::Var(x) => {
-                self.env_extend(*x);
+                self.var_extend(*x);
                 Ok(())
             }
             Pattern::Wild => {
@@ -150,54 +203,50 @@ impl<'src> Checker<'src> {
         }
     }
 
-    pub fn end_pattern(&mut self, pat: &Pattern) {
+    pub fn free_pattern(&mut self, pat: &Pattern) {
         match pat {
             Pattern::Lit(_) => {}
             Pattern::App(_, args) => {
                 for arg in args {
-                    self.end_pattern(arg);
+                    self.free_pattern(arg);
                 }
             }
             Pattern::Var(x) => {
-                self.env_delete(*x);
+                self.var_delete(*x);
             }
             Pattern::Wild => {}
         }
     }
 
-
     pub fn check_rule(&mut self, rule: &Rule) -> Result<(),String> {
         let Rule { pat, expr } = rule;
         self.check_pattern(pat.deref())?;
         self.check_expr(expr.deref())?;
-        self.end_pattern(pat.deref());
+        self.free_pattern(pat.deref());
         Ok(())
     }
 
     pub fn check_type(&self, typ: &Type) -> Result<(),String> {
         match typ {
             Type::Var(x) => {
-                self.var_lookup(x)?;
+                self.check_var_scope(x)?;
                 Ok(())
             }
-            Type::App(ta, tb) => {
-                self.check_type(ta)?;
-                self.check_type(tb)?;
+            Type::App(cons, args) => {
+                if self.cons_env.contains(cons) == 0 {
+                    return Err("Constructor not defined!".to_string());
+                }
+                for arg in args {
+                    self.check_type(arg)?;
+                }
                 Ok(())
             }
-            Type::Arr(ta, tb) => {
-                self.check_type(ta)?;
-                self.check_type(tb)?;
+            Type::Arr(ty1, ty2) => {
+                self.check_type(ty1)?;
+                self.check_type(ty2)?;
                 Ok(())
             }
-            Type::Cons(cons) => {
-                if self.cons_env.contains(cons) > 0 {
-                    Ok(())
-                } else {
-                    Err("Constructor not defined!".to_string())
-                } 
-            }
-            Type::Lit(lit) => {
+            Type::Lit(_) => {
                 Ok(())
             }
         }
@@ -207,19 +256,19 @@ impl<'src> Checker<'src> {
         match expr {
             Expr::Lit(_) => { Ok(()) }
             Expr::Var(x) => {
-                self.var_lookup(x)
+                self.check_var_scope(x)
             }
             Expr::Lam(xs, body) => {
                 check_unique(xs)?;
-                self.env_extend_many(xs);
+                self.var_extend_many(xs);
                 self.check_expr(body)?;
-                self.env_delete_many(xs);
+                self.var_delete_many(xs);
                 Ok(())
             }
-            Expr::App(exprs) => {
-                assert!(exprs.len() >= 1);
-                for expr in exprs {
-                    self.check_expr(expr)?;
+            Expr::App(func, args) => {
+                self.check_expr(func)?;
+                for arg in args {
+                    self.check_expr(arg)?;
                 }
                 Ok(())
             }
@@ -228,6 +277,10 @@ impl<'src> Checker<'src> {
                     self.check_decl(decl)?;
                 }
                 self.check_expr(body)?;
+                for decl in decls {
+                    self.free_decl(decl)?;
+                }
+                
                 Ok(())
             }
             Expr::Case(expr, rules) => {

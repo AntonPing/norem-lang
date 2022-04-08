@@ -9,7 +9,7 @@ pub enum Expr {
     Var(Symbol),
     Cons(Symbol),
     Lam(Vec<Symbol>, Spanned<Expr>),
-    App(Vec<Spanned<Expr>>),
+    App(Spanned<Expr>,Vec<Spanned<Expr>>),
     Let(Vec<Spanned<Decl>>,Spanned<Expr>),
     Case(Spanned<Expr>, Vec<Spanned<Rule>>),
     Ifte(Spanned<Expr>, Spanned<Expr>, Spanned<Expr>),
@@ -20,9 +20,8 @@ pub enum Expr {
 pub enum Type {
     Lit(LitType),
     Var(Symbol),
-    Cons(Symbol),
-    App(Box<Type>, Box<Type>),
-    Arr(Box<Type>, Box<Type>),
+    Arr(Ptr<Type>, Ptr<Type>),
+    App(Symbol, Vec<Ptr<Type>>),
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
@@ -39,6 +38,15 @@ pub enum LitType {
     Real,
     Bool,
     Char,
+}
+
+pub fn lit_value_type(val: LitValue) -> LitType {
+    match val {
+        LitValue::Bool(_) => LitType::Bool,
+        LitValue::Char(_) => LitType::Char,
+        LitValue::Int(_) => LitType::Int,
+        LitValue::Real(_) => LitType::Real,
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -177,3 +185,5 @@ pub struct Primitive {
     pub ty: Type,
 }
 */
+
+
