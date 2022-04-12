@@ -1,18 +1,47 @@
+use crate::utils::*;
 
-type Symbol = String;
-/*
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
-    Lit(LitValue),
-    Var(Symbol),
-    Cons(Symbol),
-    Lam(Vec<Symbol>, Box<Expr>),
-    App(Box<Expr>,Vec<Box<Expr>>),
-    Let(Vec<Spanned<Decl>>,Spanned<Expr>),
-    Case(Spanned<Expr>, Vec<Spanned<Rule>>),
-    Ifte(Spanned<Expr>, Spanned<Expr>, Spanned<Expr>),
+    Lit(ExprLit),
+    Var(ExprVar),
+    Lam(ExprLam),
+    App(ExprApp),
     //Do(Vec<Statment>,Spanned<Expr>),
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+pub enum ExprLit {
+    Int(i64),
+    Real(f64),
+    Bool(bool),
+    Char(char),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExprVar {
+    pub ident: String,
+    pub span: Span,
+}
+
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExprLam {
+    pub args: Vec<String>,
+    pub body: Box<Expr>,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExprApp {
+    pub func: Box<Expr>,
+    pub args: Vec<Box<Expr>>,
+}
+
+
+
+
+/*
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Type {
@@ -22,13 +51,7 @@ pub enum Type {
     App(Symbol, Vec<Ptr<Type>>),
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub enum LitValue {
-    Int(i64),
-    Real(f64),
-    Bool(bool),
-    Char(char),
-}
+
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum LitType {
@@ -185,3 +208,4 @@ pub struct Primitive {
 */
 
 */
+

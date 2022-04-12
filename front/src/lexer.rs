@@ -34,12 +34,14 @@ pub enum Token {
     Int,
     Real,
     Bool,
+    Char,
     String,
 
     Opr,
     Var,
     UpVar,
 
+    StartOfFile,
     EndOfFile,
 }
 
@@ -262,7 +264,7 @@ impl<'src> Lexer<'src> {
 #[test]
 fn lexer_test() {
     // let string = "fn f x => { f 42 (true)}";
-    let string = "fn f x => f x";
+    let string = "fn f g x => (f x) g x";
     let mut lex = Lexer::new(string);
 
     while let Ok(tok) = lex.next_token() {

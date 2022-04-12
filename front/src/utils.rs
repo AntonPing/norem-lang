@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+use std::collections::hash_map::{Keys, IntoIter};
 use std::fmt::{Debug, Display, Formatter, self};
+use std::hash::Hash;
 use std::ops::Deref;
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
@@ -180,3 +183,84 @@ where
         std::fmt::Display::fmt(&*self.0.borrow(), f)
     }
 }
+
+pub type Symbol = String;
+
+pub struct MultiSet<T>(HashMap<T,usize>);
+
+impl<T> MultiSet<T> where T: Hash + Eq {
+
+    pub fn new() -> MultiSet<T> {
+        MultiSet(HashMap::new())
+    }
+
+    pub fn insert(&mut self, elem: T) {
+        if let Some((k,v)) = self.0.remove_entry(&elem) {
+            self.0.insert(k, v + 1);
+        } else {
+            self.0.insert(elem, 1);
+        }
+    }
+
+    pub fn remove(&mut self, elem: &T) {
+        if let Some((k,v)) = self.0.remove_entry(elem) {
+            if v > 1 {
+                self.0.insert(k, v - 1);
+            }
+        }
+    }
+
+    pub fn remove_all(&mut self, elem: &T) {
+        self.0.remove(elem);
+    }
+
+    pub fn contains(&self, value: &T) -> bool {
+        self.0.get(value).is_some()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn to_vec(self) -> Vec<T> {
+        let mut vec = Vec::new();
+        for (k,_) in self.0 {
+            vec.push(k);
+        }
+        vec
+    }
+}
+
+/*
+impl<T> IntoIterator for MultiSet<T> {
+    type Item = (T,usize) ;
+    type IntoIter = hashmap::IntoIter<T,usize>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let keys = self.0.keys().into_iter();
+        MultiSetIntoIter { keys }
+    }
+}
+
+pub struct MultiSetIntoIter<'a, T> {
+    keys: Keys<'a, T, usize>,
+}
+
+impl<'a, T> Iterator for MultiSetIntoIter<'a, T> {
+    type Item = T;
+    fn next(&mut self) -> Option<Item> {
+        let result = match self.index {
+            0 => self.pixel.r,
+            1 => self.pixel.g,
+            2 => self.pixel.b,
+            _ => return None,
+        };
+        self.index += 1;
+        Some(result)
+    }
+}
+
+
+
+
+*/
