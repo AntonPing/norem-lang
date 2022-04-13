@@ -1,9 +1,11 @@
+
 use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::*;
-use crate::expr::*;
+use crate::checker::*;
 
-use crate::ast::*;
+use super::*;
+use crate::types::*;
 
 impl Parsable for ExprLam {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
@@ -39,5 +41,31 @@ impl Parsable for ExprLam {
             }
             _ => { Err("parsing variable failed!".to_string())}
         }
+    }
+}
+
+impl Typable for ExprLam {
+    fn infer(&self, chk: &mut Checker) -> Result<TypeVar,String> {
+        
+        let mut record = Vec::new();
+        let mut args_ty = Vec::new();
+        for arg in &self.args {
+            let new_ty = TypeVar::Var(chk.newvar());
+            args_ty.push(new_ty.clone());
+            if let Some(old) = chk.environment.insert(arg.clone(), new_ty) {
+                record.push((arg.clone(),old));
+            }
+        }
+
+        let body_ty = self.body.infer(chk)?;
+
+        let res_ty = args_ty
+            .into_iter().rev()
+            .fold(body_ty, |ty1,ty2| {
+                TypeVar::Arr(Box::new(ty2), Box::new(ty1))
+            });
+
+        Ok(res_ty)
+
     }
 }

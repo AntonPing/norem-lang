@@ -1,10 +1,10 @@
-
-
+use crate::checker::*;
+use crate::types::*;
 use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::*;
 
-use crate::ast::*;
+use super::*;
 
 impl Parsable for ExprApp {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
@@ -39,5 +39,30 @@ pub fn parse_app_list(par: &mut Parser) -> Result<Box<Expr>,String> {
         Ok(func)
     } else {
         Ok(Box::new(Expr::App(ExprApp { func, args })))
+    }
+}
+
+impl Typable for ExprApp {
+    fn infer(&self, chk: &mut Checker) -> Result<TypeVar,String> {
+
+        let func_ty = self.func.infer(chk)?;
+
+        let mut args_ty = Vec::new();
+        for arg in &self.args {
+            let arg_ty = arg.infer(chk)?;
+            args_ty.push(arg_ty);
+        }
+
+        let res_ty = TypeVar::Var(chk.newvar());
+
+        let func_ty_2 = args_ty
+            .into_iter().rev()
+            .fold(res_ty, |ty1, ty2| {
+                TypeVar::Arr(Box::new(ty2), Box::new(ty1))
+            });
+        
+        chk.unify(&func_ty, &func_ty_2)?;
+
+        Ok(func_ty_2)
     }
 }

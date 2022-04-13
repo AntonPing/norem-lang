@@ -1,6 +1,8 @@
 use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::*;
+use crate::checker::*;
+use crate::types::*;
 
 use crate::ast::*;
 
@@ -24,6 +26,17 @@ impl Parsable for ExprLit {
                 Ok(Box::new(ExprLit::Char(value)))
             }
             _ => { Err("parsing variable failed!".to_string())}
+        }
+    }
+}
+
+impl Typable for ExprLit {
+    fn infer(&self, _chk: &mut Checker) -> Result<TypeVar,String> {
+        match self {
+            ExprLit::Int(_) => Ok(TypeVar::Lit(LitType::Int)),
+            ExprLit::Real(_) => Ok(TypeVar::Lit(LitType::Real)),
+            ExprLit::Char(_) => Ok(TypeVar::Lit(LitType::Char)),
+            ExprLit::Bool(_) => Ok(TypeVar::Lit(LitType::Bool)),
         }
     }
 }

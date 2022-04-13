@@ -1,10 +1,9 @@
 mod utils;
-mod ast;
 mod types;
 mod lexer;
 mod parser;
 mod checker;
-mod expr;
+mod ast;
 
 
 

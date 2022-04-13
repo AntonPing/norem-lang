@@ -1,19 +1,12 @@
+
+use crate::types::*;
 use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::{Parsable, Parser};
+use crate::checker::*;
 
-use crate::ast::*;
+use super::*;
 
-pub mod expr_lit;
-pub mod expr_var;
-pub mod expr_lam;
-pub mod expr_app;
-
-
-
-trait ExprTrait {
-    fn span(&self) -> Span;
-}
 
 impl Parsable for Expr {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
@@ -49,4 +42,13 @@ impl Parsable for Expr {
     }
 }
 
-
+impl Typable for Expr {
+    fn infer(&self, chk: &mut Checker) -> Result<TypeVar,String> {
+        match self {
+            Expr::Lit(x) => x.infer(chk),
+            Expr::Var(x) => x.infer(chk),
+            Expr::Lam(x) => x.infer(chk),
+            Expr::App(x) => x.infer(chk),
+        }
+    }
+}

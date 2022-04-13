@@ -1,5 +1,15 @@
 use crate::utils::*;
 
+pub mod expr;
+pub mod expr_lit;
+pub mod expr_var;
+pub mod expr_lam;
+pub mod expr_app;
+
+trait ExprTrait {
+    fn span(&self) -> Span;
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Lit(ExprLit),
@@ -19,14 +29,14 @@ pub enum ExprLit {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExprVar {
-    pub ident: String,
+    pub ident: Symbol,
     pub span: Span,
 }
 
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExprLam {
-    pub args: Vec<String>,
+    pub args: Vec<Symbol>,
     pub body: Box<Expr>,
     pub span: Span,
 }
