@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::ops::Mul;
-
+use crate::parser::Parsable;
 use crate::utils::*;
 use crate::ast::*;
 
@@ -17,6 +16,15 @@ pub enum TypeVar {
     Lit(LitType),
     Var(usize),
     Arr(Box<TypeVar>, Box<TypeVar>),
+    //App(Box<TypeVar>, Box<TypeVar>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Type {
+    Forall(usize,Box<Type>),
+    Lit(LitType),
+    Var(usize),
+    Arr(Box<Type>, Box<Type>),
     //App(Box<TypeVar>, Box<TypeVar>),
 }
 
@@ -90,3 +98,13 @@ impl TypeVar {
         }
     }
 }
+
+impl Parsable for TypeVar {
+    fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
+        
+
+
+    }
+}
+
+fn parse_type_arr()

@@ -11,7 +11,6 @@ impl Parsable for ExprApp {
         let func = Expr::parse(par)?;
 
         let mut args = Vec::new();
-
         while let Ok(expr) = Expr::parse(par) {
             args.push(expr);
         }
@@ -42,6 +41,8 @@ pub fn parse_app_list(par: &mut Parser) -> Result<Box<Expr>,String> {
     }
 }
 
+
+
 impl Typable for ExprApp {
     fn infer(&self, chk: &mut Checker) -> Result<TypeVar,String> {
 
@@ -54,15 +55,16 @@ impl Typable for ExprApp {
         }
 
         let res_ty = TypeVar::Var(chk.newvar());
-
+        
         let func_ty_2 = args_ty
             .into_iter().rev()
-            .fold(res_ty, |ty1, ty2| {
+            .fold(res_ty.clone(), |ty1, ty2| {
                 TypeVar::Arr(Box::new(ty2), Box::new(ty1))
             });
         
+        
         chk.unify(&func_ty, &func_ty_2)?;
 
-        Ok(func_ty_2)
+        Ok(res_ty)
     }
 }

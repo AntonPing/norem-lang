@@ -36,6 +36,10 @@ pub enum Token {
     Bool,
     Char,
     String,
+    True,
+    False,
+
+    LitType,
 
     Opr,
     Var,
@@ -51,6 +55,19 @@ pub fn is_reserved(str: &str) -> Option<Token> {
         "let" => Token::Let,
         "in" => Token::In,
         "end" => Token::End,
+        "val" => Token::Val,
+        "data" => Token::Data,
+        "type" => Token::Type,
+        
+        "case" => Token::Case,
+        "of" => Token::Of,
+        "true" => Token::Bool,
+        "false" => Token::Bool,
+        "Int" => Token::LitType,
+        "Real" => Token::LitType,
+        "Bool" => Token::LitType,
+        "Char" => Token::LitType,
+
         _ => { return None; }
     };
     Some(tok)
@@ -191,6 +208,27 @@ impl<'src> Lexer<'src> {
                 }
                 
             }
+            Some('-') => {
+                match self.peek_char() {
+                    Some('>') => {
+                        self.next_char();
+                        let end = self.pos;
+                        Ok((
+                            Token::Arrow,
+                            Span::new(start, end),
+                            &self.source[start..end]
+                        ))
+                    }
+                    _ => {
+                        let end = self.pos;
+                        Ok((
+                            Token::Opr,
+                            Span::new(start, end),
+                            &self.source[start..end]
+                        ))
+                    }
+                }
+            }
             Some('(') => {
                 let end = self.pos;
                 Ok((
@@ -237,8 +275,9 @@ impl<'src> Lexer<'src> {
                     ))
                 }  
             }
-
-
+            Some(x) if x.is_numeric() => {
+                todo!("int and real")
+            }
             None => {
                 if self.is_end {
                     return Err("file is ended!".to_string());

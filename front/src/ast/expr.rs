@@ -42,6 +42,7 @@ impl Parsable for Expr {
     }
 }
 
+
 impl Typable for Expr {
     fn infer(&self, chk: &mut Checker) -> Result<TypeVar,String> {
         match self {

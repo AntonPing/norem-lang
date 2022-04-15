@@ -4,7 +4,7 @@ use crate::parser::*;
 use crate::checker::*;
 use crate::types::*;
 
-use crate::ast::*;
+use super::*;
 
 impl Parsable for ExprLit {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
@@ -29,6 +29,8 @@ impl Parsable for ExprLit {
         }
     }
 }
+
+
 
 impl Typable for ExprLit {
     fn infer(&self, _chk: &mut Checker) -> Result<TypeVar,String> {

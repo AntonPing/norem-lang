@@ -80,6 +80,36 @@ impl<'src> Parser<'src> {
         self.pass(1)?;
         self.token(0)
     }
+
+    pub fn peek(&mut self) -> Result<Token,String> {
+        self.token(0)
+    }
+
+    pub fn match_next(&mut self, tok: Token) -> Result<Token,String> {
+        if let Ok(tok) = self.next() {
+            Ok(tok)
+        } else {
+            Err("Can't match next token!".to_string())
+        }
+    }
+
+    pub fn match_peek(&mut self, tok: Token) -> Result<Token,String> {
+        if let Ok(tok) = self.token(0) {
+            Ok(tok)
+        } else {
+            Err("Can't match this token!".to_string())
+        }
+
+    }
+
+    pub fn eof(&mut self) -> Result<(),String> {
+        let tok = self.next()?;
+        if tok == Token::EndOfFile {
+            Ok(())
+        } else {
+            Err("expected EndOfFile!".to_string())
+        }
+    }
 }
 
 #[test]

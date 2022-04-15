@@ -4,6 +4,7 @@ mod lexer;
 mod parser;
 mod checker;
 mod ast;
+mod core;
 
 
 

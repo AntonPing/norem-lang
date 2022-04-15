@@ -1,10 +1,15 @@
 use crate::utils::*;
+use crate::types::*;
 
 pub mod expr;
 pub mod expr_lit;
 pub mod expr_var;
 pub mod expr_lam;
 pub mod expr_app;
+pub mod decl;
+pub mod decl_val;
+pub mod decl_data;
+pub mod decl_type;
 
 trait ExprTrait {
     fn span(&self) -> Span;
@@ -16,6 +21,7 @@ pub enum Expr {
     Var(ExprVar),
     Lam(ExprLam),
     App(ExprApp),
+    Let(ExprLet),
     //Do(Vec<Statment>,Spanned<Expr>),
 }
 
@@ -30,7 +36,6 @@ pub enum ExprLit {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExprVar {
     pub ident: Symbol,
-    pub span: Span,
 }
 
 
@@ -38,7 +43,6 @@ pub struct ExprVar {
 pub struct ExprLam {
     pub args: Vec<Symbol>,
     pub body: Box<Expr>,
-    pub span: Span,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -47,8 +51,68 @@ pub struct ExprApp {
     pub args: Vec<Box<Expr>>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExprLet {
+    pub decls: Vec<Decl>,
+    pub body: Box<Expr>,
+}
 
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum Decl {
+    Val(DeclVal),
+    Data(DeclData),
+    Type(DeclType),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DeclVal {
+    pub name: Symbol,
+    pub args: Vec<Symbol>,
+    pub body: Expr,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DeclData {
+    pub name: Symbol,
+    pub args: Vec<Symbol>,
+    pub vars: Vec<Variant>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Variant {
+    pub cons: Symbol,
+    pub args: Vec<TypeVar>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DeclType {
+    pub name: Symbol,
+    pub args: Vec<Symbol>,
+    pub typ: TypeVar,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Pattern {
+    /// Algebraic datatype constructor, along with binding pattern
+    App(Symbol, Vec<Pattern>),
+    /// Constant
+    Lit(ExprLit),
+    /// List pattern [pat1, ... patN]
+    // List(Vec<Pat>),
+    /// Record pattern { label1, label2 }, and whether it's flexible or not
+    // Record(Vec<Row<Pat>>, bool),
+    /// Variable binding
+    Var(Symbol),
+    Wild,
+}
+
+/// Rule of a case expression
+#[derive(Clone, Debug, PartialEq)]
+pub struct Rule {
+    pub pat: Pattern,
+    pub expr: Expr,
+}
 
 /*
 
