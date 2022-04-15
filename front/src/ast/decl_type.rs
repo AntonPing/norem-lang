@@ -11,20 +11,18 @@ use super::*;
 impl Parsable for DeclType {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
         par.match_next(Token::Type)?;
-        par.match_next(Token::UpVar)?;
-        let name = par.text(0)?.to_string();
 
-        let mut args = Vec::new();
-        while par.match_next(Token::Var).is_ok() {
-            let arg = par.text(0)?.to_string();
-            args.push(arg);
-        }
+        par.match_peek(Token::UpVar)?;
+        let name = par.parse::<Symbol>()?;
 
-        par.match_peek(Token::Equal)?;
+        let args = par.many::<Symbol>(|p|
+            p.peek() == Ok(Token::Var));
 
-        let typ = *TypeVar::parse(par)?;
+        par.match_next(Token::Equal)?;
 
-        Ok(Box::new(DeclVal { name, args, body }))
+        let typ = par.parse::<TypeVar>()?;
+
+        Ok(Box::new(DeclType { name, args, typ }))
     }
 }
 

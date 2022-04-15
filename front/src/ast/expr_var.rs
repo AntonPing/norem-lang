@@ -9,13 +9,8 @@ use super::*;
 
 impl Parsable for ExprVar {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
-        match par.next()? {
-            Token::Var => {
-                let ident = par.text(0)?.to_string();
-                Ok(Box::new(ExprVar { ident }))
-            }
-            _ => { Err("parsing variable failed!".to_string())}
-        }
+        let ident = par.parse::<Symbol>()?;
+        Ok(Box::new(ExprVar{ ident }))
     }
 }
 

@@ -48,7 +48,7 @@ pub struct ExprLam {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExprApp {
     pub func: Box<Expr>,
-    pub args: Vec<Box<Expr>>,
+    pub args: Vec<Expr>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

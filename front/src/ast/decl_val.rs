@@ -11,18 +11,16 @@ use super::*;
 impl Parsable for DeclVal {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
         par.match_next(Token::Val)?;
-        par.match_next(Token::Var)?;
-        let name = par.text(0)?.to_string();
 
-        let mut args = Vec::new();
-        while par.match_next(Token::Var).is_ok() {
-            let arg = par.text(0)?.to_string();
-            args.push(arg);
-        }
+        par.match_peek(Token::Var)?;
+        let name = par.parse::<Symbol>()?;
 
-        par.match_peek(Token::Equal)?;
+        let args = par.many::<Symbol>(|p|
+            p.peek() == Ok(Token::Var));
 
-        let body = *Expr::parse(par)?;
+        par.match_next(Token::Equal)?;
+
+        let body = par.parse::<Expr>()?;
 
         Ok(Box::new(DeclVal { name, args, body }))
     }

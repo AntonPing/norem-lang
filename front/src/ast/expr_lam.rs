@@ -10,33 +10,18 @@ use crate::types::*;
 impl Parsable for ExprLam {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
 
-        match par.next()? {
+        par.match_next(Token::Fn)?;
 
-            Token::Fn => {
+        let args = par.many1::<Symbol>(|p| 
+            p.peek() == Ok(Token::Var))?;
 
-                let mut args = Vec::new();
-                while let Token::Var = par.next()? {
-                    args.push(par.text(0)?.to_string());
-                }
+        par.match_next(Token::EArrow)?;
 
-                if args.len() == 0 {
-                    return Err(
-                        "function should have at least one argument!"
-                    .to_string());
-                }
+        let body = par.parse::<ExprApp>()?;
 
-                if Token::EArrow != par.token(0)? {
-                    return Err(format!(
-                        "excepted token '=>' ! found {:?}", par.token(0)?
-                    ).to_string());
-                }
-
-                let body = expr_app::parse_app_list(par)?;
-                
-                Ok(Box::new(ExprLam { args, body}))
-            }
-            _ => { Err("parsing variable failed!".to_string())}
-        }
+        let body = Box::new(Expr::App(body));
+        
+        Ok(Box::new(ExprLam { args, body }))
     }
 }
 

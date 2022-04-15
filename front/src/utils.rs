@@ -6,6 +6,8 @@ use std::ops::Deref;
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
+use crate::parser::Parsable;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 /// A span in the source, with a start and end location
 pub struct Span {
@@ -115,76 +117,32 @@ impl<T: Display> Display for Spanned<T> {
     }
 }
 
-//
-// Pointers
-//
 
-pub type Ptr<T> = Rc<T>;
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct Symbol(String);
 
-#[allow(non_snake_case)]
-pub fn Ptr<T>(val: T) -> Ptr<T> {
-    Ptr::new(val)
-}
-
-
-pub struct Mut<T>(Rc<RefCell<T>>);
-pub struct MutWeak<T>(Weak<RefCell<T>>);
-
-impl<T> Mut<T> {
-    pub fn new(val: T) -> Mut<T> {
-        Mut(Rc::new(RefCell::new(val)))
-    }
-
-    pub fn weak(&self) -> MutWeak<T> {
-        MutWeak(Rc::downgrade(&self.0))
-    }
-
-    pub fn take_inner(this: Self) -> Result<T, Mut<T>> {
-        Rc::try_unwrap(this.0).map(|x| x.into_inner()).map_err(Mut)
+impl Symbol {
+    pub fn new(str: &str) -> Self {
+        Symbol(str.to_string())
     }
 }
 
-impl<T> Deref for Mut<T> {
-    type Target = Rc<RefCell<T>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+use crate::parser::*;
+use crate::lexer::*;
+impl Parsable for Symbol {
+    fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
+        let tok = par.next()?;
+        match tok {
+            Token::Var | Token::UpVar => {
+                Ok(Box::new(Symbol::new(par.text(0)?)))
+            }
+            _ => {
+                Err("can't parse symbol!".to_string())
+            }
+        }
     }
+
 }
-
-impl<T> Deref for MutWeak<T> {
-    type Target = Weak<RefCell<T>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> Clone for Mut<T> {
-    fn clone(&self) -> Self {
-        Mut(self.0.clone())
-    }
-}
-
-impl<T> Debug for Mut<T>
-where
-    T: Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.borrow().fmt(f)
-    }
-}
-
-impl<T> std::fmt::Display for Mut<T>
-where
-    T: std::fmt::Display,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&*self.0.borrow(), f)
-    }
-}
-
-pub type Symbol = String;
 
 pub struct MultiSet<T>(HashMap<T,usize>);
 

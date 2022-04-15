@@ -82,7 +82,23 @@ impl<'src> Parser<'src> {
     }
 
     pub fn peek(&mut self) -> Result<Token,String> {
-        self.token(0)
+        self.token(1)
+    }
+
+    pub fn match_this(&mut self, tok: Token) -> Result<Token,String> {
+        if let Ok(tok) = self.token(0) {
+            Ok(tok)
+        } else {
+            Err("Can't match this token!".to_string())
+        }
+    }
+
+    pub fn match_peek(&mut self, tok: Token) -> Result<Token,String> {
+        if let Ok(tok) = self.peek() {
+            Ok(tok)
+        } else {
+            Err("Can't match peek token!".to_string())
+        }
     }
 
     pub fn match_next(&mut self, tok: Token) -> Result<Token,String> {
@@ -93,15 +109,6 @@ impl<'src> Parser<'src> {
         }
     }
 
-    pub fn match_peek(&mut self, tok: Token) -> Result<Token,String> {
-        if let Ok(tok) = self.token(0) {
-            Ok(tok)
-        } else {
-            Err("Can't match this token!".to_string())
-        }
-
-    }
-
     pub fn eof(&mut self) -> Result<(),String> {
         let tok = self.next()?;
         if tok == Token::EndOfFile {
@@ -110,6 +117,53 @@ impl<'src> Parser<'src> {
             Err("expected EndOfFile!".to_string())
         }
     }
+
+    pub fn many<T: Parsable>(&mut self, cond: fn(&mut Parser) -> bool) -> Vec<T> {
+        let mut vec = Vec::new();
+
+        while cond(self) {
+            vec.push(*T::parse(self).unwrap())
+        }
+        
+        vec
+    }
+
+    pub fn many1<T: Parsable>(&mut self, cond: fn(&mut Parser) -> bool) -> Result<Vec<T>,String> {
+        let mut vec = Vec::new();
+
+        vec.push(*T::parse(self)?);
+
+        while cond(self) {
+            vec.push(*T::parse(self).unwrap())
+        }
+        
+        Ok(vec)
+    }
+
+    pub fn sepby<T: Parsable>(
+        &mut self,
+        cond: fn(&mut Parser) -> bool,
+        delim: Token
+    ) -> Vec<T> {
+        let mut vec = Vec::new();
+
+        while cond(self) {
+            vec.push(*T::parse(self).unwrap());
+            if self.peek() == Ok(delim) {
+                self.next();
+            } else {
+                break;
+            }
+        }
+        
+        vec
+    }
+
+    pub fn parse<T: Parsable>(&mut self) -> Result<T,String> {
+        let res = T::parse(self)?;
+        Ok(*res)
+    }
+
 }
 
 #[test]
