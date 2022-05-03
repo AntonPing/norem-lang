@@ -12,7 +12,7 @@ impl Parsable for ExprLam {
 
         par.match_next(Token::Fn)?;
 
-        let args = par.many1::<Symbol>(|p| 
+        let args = par.parse_many1::<Symbol>(|p| 
             p.peek() == Ok(Token::Var))?;
 
         par.match_next(Token::EArrow)?;
@@ -26,13 +26,13 @@ impl Parsable for ExprLam {
 }
 
 impl Typable for ExprLam {
-    fn infer(&self, chk: &mut Checker) -> Result<TypeVar,String> {
+    fn infer(&self, chk: &mut Checker) -> Result<Type,String> {
         
         let mut record = Vec::new();
         
         let mut args_ty = Vec::new();
         for arg in &self.args {
-            let new_ty = TypeVar::Var(chk.newvar());
+            let new_ty = Type::Var(chk.newvar());
             args_ty.push(new_ty.clone());
             
             if let Some(old) = chk.environment
@@ -46,7 +46,7 @@ impl Typable for ExprLam {
         let res_ty = args_ty
             .into_iter().rev()
             .fold(body_ty, |ty1,ty2| {
-                TypeVar::Arr(Box::new(ty2), Box::new(ty1))
+                Type::Arr(Box::new(ty2), Box::new(ty1))
             });
 
         Ok(res_ty)

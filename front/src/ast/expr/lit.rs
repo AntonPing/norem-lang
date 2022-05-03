@@ -33,12 +33,12 @@ impl Parsable for ExprLit {
 
 
 impl Typable for ExprLit {
-    fn infer(&self, _chk: &mut Checker) -> Result<TypeVar,String> {
+    fn infer(&self, _chk: &mut Checker) -> Result<Type,String> {
         match self {
-            ExprLit::Int(_) => Ok(TypeVar::Lit(LitType::Int)),
-            ExprLit::Real(_) => Ok(TypeVar::Lit(LitType::Real)),
-            ExprLit::Char(_) => Ok(TypeVar::Lit(LitType::Char)),
-            ExprLit::Bool(_) => Ok(TypeVar::Lit(LitType::Bool)),
+            ExprLit::Int(_) => Ok(Type::Lit(TypeLit::Int)),
+            ExprLit::Real(_) => Ok(Type::Lit(TypeLit::Real)),
+            ExprLit::Char(_) => Ok(Type::Lit(TypeLit::Char)),
+            ExprLit::Bool(_) => Ok(Type::Lit(TypeLit::Bool)),
         }
     }
 }

@@ -8,21 +8,21 @@ use crate::checker::*;
 use super::*;
 
 
-impl Parsable for DeclType {
+impl Parsable for DeclVal {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
-        par.match_next(Token::Type)?;
+        par.match_next(Token::Val)?;
 
-        par.match_peek(Token::UpVar)?;
+        par.match_peek(Token::Var)?;
         let name = par.parse::<Symbol>()?;
 
-        let args = par.many::<Symbol>(|p|
+        let args = par.parse_many::<Symbol>(|p|
             p.peek() == Ok(Token::Var));
 
         par.match_next(Token::Equal)?;
 
-        let typ = par.parse::<TypeVar>()?;
+        let body = par.parse::<Expr>()?;
 
-        Ok(Box::new(DeclType { name, args, typ }))
+        Ok(Box::new(DeclVal { name, args, body }))
     }
 }
 

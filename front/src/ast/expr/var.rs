@@ -1,5 +1,5 @@
 use crate::checker::Typable;
-use crate::types::TypeVar;
+use crate::types::Type;
 use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::*;
@@ -16,7 +16,7 @@ impl Parsable for ExprVar {
 
 
 impl Typable for ExprVar {
-    fn infer(&self, chk: &mut Checker) -> Result<TypeVar,String> {
+    fn infer(&self, chk: &mut Checker) -> Result<Type,String> {
         let sc = chk.lookup(&self.ident)?;
         let ty = chk.instantiate(&sc);
         Ok(ty)

@@ -2,7 +2,8 @@
 
 members = [
     # "frontend",
-    # "backend",
-    # "driver",
     "front",
+    "back",
+    "driver",
+    
 ]

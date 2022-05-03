@@ -4,15 +4,33 @@ use crate::lexer::{Lexer, Token, self};
 use crate::utils::*;
 use crate::ast::*;
 
+#[macro_export]
+macro_rules! catch {
+    ( $par:expr, $res:expr, $( $msg:expr ),* ) => {
+        {
+            if let Some(value) = res {
+                value
+            } else {
+                $(
+                    par.error.push($msg);
+                )*
+                return None;
+            }
+        }
+    };
+}
+
+
 pub trait Parsable {
-    fn parse<'src>(par: &mut Parser<'src>) -> Result<Box<Self>,String>;
+    fn parse(par: &mut Parser) -> Result<Box<Self>,String>;
 }
 
 pub struct Parser<'src> {
-    lexer: Lexer<'src>,    
+    lexer: Lexer<'src>,
     buffer: VecDeque<(Token,Span,&'src str)>,
     is_end: bool,
     //is_err: Option<(Token,Span,&'src str)>,
+    error: Vec<String>,
 }
 
 impl<'src> Parser<'src> {
@@ -21,6 +39,7 @@ impl<'src> Parser<'src> {
             lexer: Lexer::new(str),
             buffer: VecDeque::new(),
             is_end: false,
+            error: Vec::new(),
         };
         
         par.buffer.push_back(
@@ -118,45 +137,59 @@ impl<'src> Parser<'src> {
         }
     }
 
-    pub fn many<T: Parsable>(&mut self, cond: fn(&mut Parser) -> bool) -> Vec<T> {
-        let mut vec = Vec::new();
+    pub fn parse_many<T: Parsable>(&mut self, first: &Vec<Token>) -> Result<Vec<T>,String> {
+        let mut vec: Vec<T> = Vec::new();
 
-        while cond(self) {
-            vec.push(*T::parse(self).unwrap())
-        }
-        
-        vec
-    }
-
-    pub fn many1<T: Parsable>(&mut self, cond: fn(&mut Parser) -> bool) -> Result<Vec<T>,String> {
-        let mut vec = Vec::new();
-
-        vec.push(*T::parse(self)?);
-
-        while cond(self) {
-            vec.push(*T::parse(self).unwrap())
-        }
-        
-        Ok(vec)
-    }
-
-    pub fn sepby<T: Parsable>(
-        &mut self,
-        cond: fn(&mut Parser) -> bool,
-        delim: Token
-    ) -> Vec<T> {
-        let mut vec = Vec::new();
-
-        while cond(self) {
-            vec.push(*T::parse(self).unwrap());
-            if self.peek() == Ok(delim) {
-                self.next();
+        while let Ok(tok) = self.peek() {
+            if first.contains(&tok) {
+                vec.push(self.parse()?);
             } else {
                 break;
             }
         }
         
-        vec
+        Ok(vec)
+    }
+
+    pub fn parse_many1<T: Parsable>(&mut self, first: &Vec<Token>) -> Result<Vec<T>,String> {
+        let vec = self.parse_many(first)?;
+
+        if vec.len() >= 1 {
+            Ok(vec)
+        } else {
+            Err("Except at least one!".to_string())
+        }
+    }
+
+    pub fn parse_sepby<T: Parsable>(&mut self, delim: Token) -> Result<Vec<T>,String> {
+        let mut vec: Vec<T> = Vec::new();
+
+        if let Ok(first) = self.parse() {
+            vec.push(first);
+        } else {
+            return Ok(vec);
+        }
+
+        while let Ok(tok) = self.peek() {
+            if tok == delim {
+                self.next();
+                vec.push(*T::parse(self)?);
+            } else {
+                break;
+            }
+        }
+        
+        Ok(vec)
+    }
+
+    pub fn parse_sepby1<T: Parsable>(&mut self, delim: Token) -> Result<Vec<T>,String> {
+        let vec = self.parse_sepby1(delim)?;
+
+        if vec.len() >= 1 {
+            Ok(vec)
+        } else {
+            Err("Except at least one!".to_string())
+        }
     }
 
     pub fn parse<T: Parsable>(&mut self) -> Result<T,String> {

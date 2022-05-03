@@ -1,15 +1,14 @@
 use crate::utils::*;
-use crate::types::*;
+
 
 pub mod expr;
-pub mod expr_lit;
-pub mod expr_var;
-pub mod expr_lam;
-pub mod expr_app;
+pub mod typp;
 pub mod decl;
-pub mod decl_val;
-pub mod decl_data;
-pub mod decl_type;
+pub mod pattern;
+pub mod variant;
+pub mod rule;
+
+use typp::*;
 
 trait ExprTrait {
     fn span(&self) -> Span;
@@ -22,7 +21,7 @@ pub enum Expr {
     Lam(ExprLam),
     App(ExprApp),
     Let(ExprLet),
-    //Do(Vec<Statment>,Spanned<Expr>),
+    Case(ExprCase),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
@@ -57,6 +56,11 @@ pub struct ExprLet {
     pub body: Box<Expr>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExprCase {
+    pub expr: Box<Expr>,
+    pub rules: Vec<Rule>,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Decl {
@@ -82,14 +86,14 @@ pub struct DeclData {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Variant {
     pub cons: Symbol,
-    pub args: Vec<TypeVar>,
+    pub args: Vec<Type>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeclType {
     pub name: Symbol,
     pub args: Vec<Symbol>,
-    pub typ: TypeVar,
+    pub typ: Type,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -111,110 +115,49 @@ pub enum Pattern {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Rule {
     pub pat: Pattern,
-    pub expr: Expr,
+    pub body: Expr,
 }
-
-/*
-
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Type {
-    Lit(LitType),
-    Var(Symbol),
-    Arr(Ptr<Type>, Ptr<Type>),
-    App(Symbol, Vec<Ptr<Type>>),
+    Temp(usize),
+    Cons(Symbol),
+    Lit(TypeLit),
+    Var(TypeVar),
+    Arr(TypeArr),
+    App(TypeApp),
 }
 
-
-
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub enum LitType {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
+pub enum TypeLit {
     Int,
     Real,
     Bool,
     Char,
 }
 
-pub fn lit_value_type(val: LitValue) -> LitType {
-    match val {
-        LitValue::Bool(_) => LitType::Bool,
-        LitValue::Char(_) => LitType::Char,
-        LitValue::Int(_) => LitType::Int,
-        LitValue::Real(_) => LitType::Real,
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
-pub enum Decl {
-    Val(Spanned<ValDecl>),
-    Data(Spanned<DataDecl>),
-    Type(Spanned<TypeDecl>),
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct ValDecl {
+pub struct TypeVar {
     pub name: Symbol,
-    pub args: Vec<Symbol>,
-    pub body: Expr,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct DataDecl {
-    pub name: Symbol,
-    pub args: Vec<Symbol>,
-    pub vars: Vec<Spanned<Variant>>,
+pub struct TypeArr {
+    pub ty1: Box<Type>,
+    pub ty2: Box<Type>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Variant {
-    pub cons: Symbol,
-    pub args: Vec<Type>,
+pub struct TypeApp {
+    pub ty1: Box<Type>,
+    pub ty2: Box<Type>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct TypeDecl {
-    pub name: Symbol,
-    pub args: Vec<Symbol>,
-    pub typ: Type,
+pub enum Scheme {
+    Mono(Type),
+    Poly(Vec<Symbol>,Type),
 }
-
-/*
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub struct Row<T> {
-    pub label: Symbol,
-    pub data: T,
-}
-*/
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Pattern {
-    /// Algebraic datatype constructor, along with binding pattern
-    App(Symbol, Vec<Spanned<Pattern>>),
-    /// Constant
-    Lit(LitValue),
-    /// List pattern [pat1, ... patN]
-    // List(Vec<Pat>),
-    /// Record pattern { label1, label2 }, and whether it's flexible or not
-    // Record(Vec<Row<Pat>>, bool),
-    /// Variable binding
-    Var(Symbol),
-    Wild,
-}
-
-/// Rule of a case expression
-#[derive(Clone, Debug, PartialEq)]
-pub struct Rule {
-    pub pat: Spanned<Pattern>,
-    pub expr: Spanned<Expr>,
-}
-
-/*
-#[derive(Clone, Debug, PartialEq)]
-pub enum Statment {
-    Assign(Symbol,Expr),
-    Ignore(Expr),
-}
-*/
 
 /*
 /// Interestingly, MLton immediately desugars tuples during parsing, rather than
@@ -279,7 +222,5 @@ pub struct Primitive {
     pub sym: Symbol,
     pub ty: Type,
 }
-*/
-
 */
 

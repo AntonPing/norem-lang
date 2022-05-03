@@ -10,7 +10,7 @@ impl Parsable for ExprApp {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
         let func = Expr::parse(par)?;
 
-        let args = par.many1::<Expr>(|p|
+        let args = par.parse_many1::<Expr>(|p|
             p.peek().is_ok() && Expr::expr_start(p.peek().unwrap()))?;
 
         Ok(Box::new(ExprApp { func, args }))
@@ -37,7 +37,7 @@ pub fn parse_app_list(par: &mut Parser) -> Result<Box<Expr>,String> {
 
 
 impl Typable for ExprApp {
-    fn infer(&self, chk: &mut Checker) -> Result<TypeVar,String> {
+    fn infer(&self, chk: &mut Checker) -> Result<Type,String> {
 
         let func_ty = self.func.infer(chk)?;
 
@@ -47,12 +47,12 @@ impl Typable for ExprApp {
             args_ty.push(arg_ty);
         }
 
-        let res_ty = TypeVar::Var(chk.newvar());
+        let res_ty = Type::Var(chk.newvar());
         
         let func_ty_2 = args_ty
             .into_iter().rev()
             .fold(res_ty.clone(), |ty1, ty2| {
-                TypeVar::Arr(Box::new(ty2), Box::new(ty1))
+                Type::Arr(Box::new(ty2), Box::new(ty1))
             });
         
         

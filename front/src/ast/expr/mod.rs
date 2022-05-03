@@ -7,6 +7,12 @@ use crate::checker::*;
 
 use super::*;
 
+pub mod lit;
+pub mod var;
+pub mod lam;
+pub mod app;
+pub mod lett;
+
 impl Parsable for Expr {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
         match par.token(1)? { // peek one
@@ -62,7 +68,7 @@ impl Expr {
 
 
 impl Typable for Expr {
-    fn infer(&self, chk: &mut Checker) -> Result<TypeVar,String> {
+    fn infer(&self, chk: &mut Checker) -> Result<Type,String> {
         match self {
             Expr::Lit(x) => x.infer(chk),
             Expr::Var(x) => x.infer(chk),

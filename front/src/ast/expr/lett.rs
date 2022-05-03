@@ -7,7 +7,7 @@ use crate::checker::*;
 use super::*;
 use crate::types::*;
 
-impl Parsable for ExprLam {
+impl Parsable for ExprLet {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
 
         match par.next()? {
@@ -31,7 +31,7 @@ impl Parsable for ExprLam {
                     ).to_string());
                 }
 
-                let body = expr_app::parse_app_list(par)?;
+                let body = app::parse_app_list(par)?;
                 
                 Ok(Box::new(ExprLam { args, body}))
             }
@@ -40,7 +40,7 @@ impl Parsable for ExprLam {
     }
 }
 
-impl Typable for ExprLam {
+impl Typable for ExprLet {
     fn infer(&self, chk: &mut Checker) -> Result<TypeVar,String> {
         
         let mut record = Vec::new();
