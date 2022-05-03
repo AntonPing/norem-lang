@@ -82,7 +82,8 @@ impl Type {
 
 impl Parsable for Type {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
-        let mut vec: Vec<Type> = par.parse_sepby1(Token::Arrow)?;
+        let xs: Vec<SingleType> = par.parse_sepby1(Token::Arrow)?;
+        let mut vec: Vec<Type> = xs.into_iter().map(|x|x.0).collect();
 
         let mut init = vec.pop().unwrap();
 
@@ -96,8 +97,17 @@ impl Parsable for Type {
     }
 }
 
+struct SingleType(Type);
+
+impl Parsable for SingleType {
+    fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
+       let res = parse_single_type(par)?; 
+       Ok(SingleType(res))
+    }
+    
+}
+
 fn parse_single_type(par: &mut Parser) -> Result<Box<Type>,String> {
-    /*
     match par.peek()? {
         Token::LitType => {
             let res = match par.text(0)? {
@@ -114,12 +124,16 @@ fn parse_single_type(par: &mut Parser) -> Result<Box<Type>,String> {
 
             let cons: Symbol = par.parse()?;
 
-            let args: Vec<Type> = par.parse_many1(
+            let args: Vec<Type> = par.parse_many(
                 &vec![Token::LitType, Token::UpVar,Token::LParen])?;
+            
+            let mut res = Type::Cons(cons);
+            
+            for arg in args {
+                res = Type::App(Box::new(res), Box::new(arg));
+            }
 
-
-
-            Ok(Box::new(Type::App(TypeApp { cons, args })))
+            Ok(Box::new(res))
         }
         Token::LParen => {
             par.match_next(Token::LParen)?;
@@ -131,5 +145,4 @@ fn parse_single_type(par: &mut Parser) -> Result<Box<Type>,String> {
             Err("Can't parse type".to_string())
         }
     }
-    */
 }

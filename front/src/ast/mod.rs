@@ -123,11 +123,11 @@ pub enum Type {
     Temp(usize),
     Cons(Symbol),
     Lit(TypeLit),
-    Var(TypeVar),
-    Arr(TypeArr),
-    App(TypeApp),
+    Var(Symbol),
+    Arr(Box<Type>, Box<Type>),
+    App(Box<Type>, Box<Type>),
+    Poly(Vec<Symbol>, Box<Type>),
 }
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
 pub enum TypeLit {
     Int,
@@ -136,6 +136,7 @@ pub enum TypeLit {
     Char,
 }
 
+/*
 #[derive(Clone, Debug, PartialEq)]
 pub struct TypeVar {
     pub name: Symbol,
@@ -152,6 +153,7 @@ pub struct TypeApp {
     pub ty1: Box<Type>,
     pub ty2: Box<Type>,
 }
+*/
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Scheme {
