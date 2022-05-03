@@ -2,7 +2,6 @@ use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::*;
 use crate::checker::*;
-use crate::types::*;
 
 use super::*;
 
@@ -29,8 +28,6 @@ impl Parsable for ExprLit {
         }
     }
 }
-
-
 
 impl Typable for ExprLit {
     fn infer(&self, _chk: &mut Checker) -> Result<Type,String> {

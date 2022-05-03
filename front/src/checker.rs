@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::utils::*;
-use crate::types::*;
 use crate::ast::*;
 
 /*
@@ -78,29 +77,35 @@ impl Checker {
         self.arena[n].is_none()
     }
 
-    fn freevar(&self, ty: &Type) -> Vec<usize> {
+    fn freevar(&self, ty: &Type) -> Vec<Symbol> {
         let mut vec = Vec::new();
         let mut stack = Vec::new();
-        stack.push(ty);
+        stack.push(ty.clone());
 
         while let Some(ty) = stack.pop() {
             match ty {
                 Type::Lit(_) => {}
+                Type::Cons(_) => {}
                 Type::Var(x) => {
-                    if self.is_unbind(*x) {
-                        vec.push(*x);
-                    }
+                    vec.push(x);
                 }
                 Type::Arr(ty1,ty2) => {
-                    stack.push(ty1);
-                    stack.push(ty2);
+                    stack.push(*ty1);
+                    stack.push(*ty2);
                 }
                 Type::App(cons, args) => {
                     todo!();
-                    for arg in args {
-                        stack.push(arg);
-                    }
                 }
+                Type::Temp(n) => {
+                    /*
+                    if self.is_unbind(n) {
+                        let mut str = n.to_string();
+                        str.insert(0, '#');
+                        vec.push(str.into());
+                    }
+                    */
+                }
+                //Type::Poly((), ())
             }
         }
 
@@ -125,7 +130,7 @@ impl Checker {
                 let mut sub = HashMap::new();
                 for arg in args {
                     let new = self.newvar();
-                    sub.insert(*arg, Type::Var(new));
+                    sub.insert(arg.clone(), Type::Temp(new));
                 }
                 ty.subst(&sub)
             }
@@ -134,15 +139,14 @@ impl Checker {
     pub fn unify(&mut self, ty1: &Type, ty2: &Type) -> Result<(),String> {
         println!("unify {:?} ~ {:?}",ty1,ty2);
         match (ty1,ty2) {
-            (Type::Var(x), Type::Var(y)) 
-                if *x == *y => {
+            (Type::Temp(x), Type::Temp(y)) if *x == *y => {
                 Ok(())
             }
-            (Type::Var(x), ty) => {
+            (Type::Temp(x), ty) => {
                 self.assign(*x,ty.clone())?;
                 Ok(())
             }
-            (ty, Type::Var(x)) => {
+            (ty, Type::Temp(x)) => {
                 self.assign(*x,ty.clone())?;
                 Ok(())
             }
@@ -168,15 +172,8 @@ impl Checker {
 
     pub fn merge_type(&self, ty: &Type) -> Type {
         match ty {
-            Type::Lit(lit) => {
-                Type::Lit(*lit)
-            }
-            Type::Var(x) => {
-                if let Some(ref res) = self.arena[*x] {
-                    self.merge_type(res)
-                } else {
-                    Type::Var(*x)
-                }
+            Type::Lit(_) | Type::Cons(_) | Type::Var(_) => {
+                ty.clone()
             }
             Type::Arr(ty1,ty2) => {
                 let res_ty1 = self.merge_type(ty1);
@@ -186,6 +183,14 @@ impl Checker {
             Type::App(cons, args) => {
                 todo!();
             }
+            Type::Temp(n) => {
+                if let Some(ref res) = self.arena[*n] {
+                    self.merge_type(res)
+                } else {
+                    ty.clone()
+                }
+            }
+            
         }
     }
 }

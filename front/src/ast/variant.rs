@@ -1,7 +1,3 @@
-
-use std::env::VarError;
-
-use crate::types::*;
 use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::{Parsable, Parser};
@@ -14,9 +10,11 @@ impl Parsable for Variant {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
 
         par.match_next(Token::UpVar)?;
-        let cons: Symbol = par.parse()?;
+        let cons = par.parse::<Symbol>()?;
 
-        let args: Vec<Type> = par.parse_many(start_of_type);
+        let args: Vec<Type> = par.parse_many(&vec![
+            Token::LitType, Token::UpVar, Token::LParen
+        ])?;
 
         Ok(Box::new(Variant { cons, args }))
     }

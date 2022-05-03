@@ -1,5 +1,3 @@
-
-use crate::types::*;
 use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::{Parsable, Parser};
@@ -15,8 +13,9 @@ impl Parsable for DeclVal {
         par.match_peek(Token::Var)?;
         let name = par.parse::<Symbol>()?;
 
-        let args = par.parse_many::<Symbol>(|p|
-            p.peek() == Ok(Token::Var));
+        let args = par.parse_many::<Symbol>(
+            &vec![Token::Var]
+        )?;
 
         par.match_next(Token::Equal)?;
 

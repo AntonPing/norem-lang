@@ -1,10 +1,7 @@
 use std::collections::HashMap;
-use std::collections::hash_map::{Keys, IntoIter};
 use std::fmt::{Debug, Display, Formatter, self};
 use std::hash::Hash;
 use std::ops::Deref;
-use std::cell::RefCell;
-use std::rc::{Rc, Weak};
 
 use crate::parser::Parsable;
 
@@ -124,6 +121,18 @@ pub struct Symbol(String);
 impl Symbol {
     pub fn new(str: &str) -> Self {
         Symbol(str.to_string())
+    }
+}
+
+impl From<String> for Symbol {
+    fn from(item: String) -> Self {
+        Symbol(item)
+    }
+}
+
+impl From<Symbol> for String {
+    fn from(item: Symbol) -> Self {
+        item.0
     }
 }
 

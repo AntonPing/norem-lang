@@ -1,45 +1,31 @@
-
 use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::*;
 use crate::checker::*;
 
 use super::*;
-use crate::types::*;
 
 impl Parsable for ExprLet {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
 
-        match par.next()? {
+        par.match_next(Token::Let)?;
 
-            Token::Fn => {
+        let decls = par.parse_many1::<Decl>(&vec![
+            Token::Val, Token::Data, Token::Type,
+        ])?;
 
-                let mut args = Vec::new();
-                while let Token::Var = par.next()? {
-                    args.push(par.text(0)?.to_string());
-                }
+        par.match_next(Token::In)?;
 
-                if args.len() == 0 {
-                    return Err(
-                        "function should have at least one argument!"
-                    .to_string());
-                }
+        let body = par.parse::<Expr>()?;
 
-                if Token::EArrow != par.token(0)? {
-                    return Err(format!(
-                        "excepted token '=>' ! found {:?}", par.token(0)?
-                    ).to_string());
-                }
+        let body = Box::new(body);
 
-                let body = app::parse_app_list(par)?;
-                
-                Ok(Box::new(ExprLam { args, body}))
-            }
-            _ => { Err("parsing variable failed!".to_string())}
-        }
+        Ok(Box::new(ExprLet { decls, body }))
+
     }
 }
 
+/*
 impl Typable for ExprLet {
     fn infer(&self, chk: &mut Checker) -> Result<TypeVar,String> {
         
@@ -68,3 +54,4 @@ impl Typable for ExprLet {
 
     }
 }
+*/

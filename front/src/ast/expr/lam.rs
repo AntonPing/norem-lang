@@ -1,19 +1,18 @@
-
 use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::*;
 use crate::checker::*;
 
 use super::*;
-use crate::types::*;
 
 impl Parsable for ExprLam {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
 
         par.match_next(Token::Fn)?;
 
-        let args = par.parse_many1::<Symbol>(|p| 
-            p.peek() == Ok(Token::Var))?;
+        let args = par.parse_many1::<Symbol>(
+            &vec![Token::Var]
+        )?;
 
         par.match_next(Token::EArrow)?;
 
@@ -32,7 +31,7 @@ impl Typable for ExprLam {
         
         let mut args_ty = Vec::new();
         for arg in &self.args {
-            let new_ty = Type::Var(chk.newvar());
+            let new_ty = Type::Temp(chk.newvar());
             args_ty.push(new_ty.clone());
             
             if let Some(old) = chk.environment

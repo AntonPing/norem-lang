@@ -1,5 +1,4 @@
 use crate::checker::*;
-use crate::types::*;
 use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::*;
@@ -10,12 +9,44 @@ impl Parsable for ExprApp {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
         let func = Expr::parse(par)?;
 
+        let args = par.parse_many::<Expr>(&vec![
+            Token::Int, Token::Real, Token::Char, Token::Bool,
+            Token::Var, Token::Fn, Token::LParen,
+        ])?;
+
+        Ok(Box::new(ExprApp { func, args }))
+    }
+}
+
+
+
+/*
+struct ExprAppList(ExprApp);
+
+impl From<ExprApp> for ExprAppList {
+    fn from(item: ExprApp) -> Self {
+        ExprAppList(item)
+    }
+}
+
+impl From<ExprAppList> for ExprApp {
+    fn from(item: ExprAppList) -> Self {
+        item.0
+    }
+}
+
+impl Parsable for ExprAppList {
+    fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
+        let func = Expr::parse(par)?;
+
         let args = par.parse_many1::<Expr>(|p|
             p.peek().is_ok() && Expr::expr_start(p.peek().unwrap()))?;
 
         Ok(Box::new(ExprApp { func, args }))
     }
 }
+*/
+
 /*
 pub fn parse_app_list(par: &mut Parser) -> Result<Box<Expr>,String> {
     let func = Expr::parse(par)?;
@@ -34,8 +65,6 @@ pub fn parse_app_list(par: &mut Parser) -> Result<Box<Expr>,String> {
 }
 */
 
-
-
 impl Typable for ExprApp {
     fn infer(&self, chk: &mut Checker) -> Result<Type,String> {
 
@@ -47,7 +76,7 @@ impl Typable for ExprApp {
             args_ty.push(arg_ty);
         }
 
-        let res_ty = Type::Var(chk.newvar());
+        let res_ty = Type::Temp(chk.newvar());
         
         let func_ty_2 = args_ty
             .into_iter().rev()

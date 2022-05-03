@@ -1,5 +1,5 @@
 mod utils;
-mod types;
+
 mod lexer;
 mod parser;
 mod checker;

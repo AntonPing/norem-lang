@@ -1,12 +1,9 @@
-
-use crate::types::*;
 use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::{Parsable, Parser};
 use crate::checker::*;
 
 use super::*;
-
 
 impl Parsable for Pattern {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
@@ -22,7 +19,10 @@ impl Parsable for Pattern {
             }
             Token::UpVar => {
                 let con = par.parse::<Symbol>()?;
-                let args : Vec<Pattern> = par.parse_many(start_of_pattern);
+                let args : Vec<Pattern> = par.parse_many(&vec![
+                    Token::Int, Token::Real, Token::Bool , Token::Char,
+                    Token::Var, Token::UpVar, Token::LParen
+                ])?;
                 Ok(Box::new(Pattern::App(con, args)))
             }
             Token::LParen => {
@@ -37,6 +37,7 @@ impl Parsable for Pattern {
     }
 }
 
+/*
 fn start_of_pattern(par: &mut Parser) -> bool {
     if let Ok(tok) = par.peek() {
         match tok {
@@ -51,4 +52,5 @@ fn start_of_pattern(par: &mut Parser) -> bool {
         false
     }
 }
+*/
 

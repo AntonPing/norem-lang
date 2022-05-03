@@ -2,17 +2,13 @@ use crate::utils::*;
 
 
 pub mod expr;
-pub mod typp;
+pub mod types;
 pub mod decl;
 pub mod pattern;
 pub mod variant;
 pub mod rule;
 
-use typp::*;
-
-trait ExprTrait {
-    fn span(&self) -> Span;
-}
+use types::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
@@ -36,7 +32,6 @@ pub enum ExprLit {
 pub struct ExprVar {
     pub ident: Symbol,
 }
-
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExprLam {
@@ -96,6 +91,13 @@ pub struct DeclType {
     pub typ: Type,
 }
 
+/// Rule of a case expression
+#[derive(Clone, Debug, PartialEq)]
+pub struct Rule {
+    pub pat: Pattern,
+    pub body: Expr,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Pattern {
     /// Algebraic datatype constructor, along with binding pattern
@@ -111,29 +113,29 @@ pub enum Pattern {
     Wild,
 }
 
-/// Rule of a case expression
-#[derive(Clone, Debug, PartialEq)]
-pub struct Rule {
-    pub pat: Pattern,
-    pub body: Expr,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Type {
-    Temp(usize),
     Cons(Symbol),
     Lit(TypeLit),
     Var(Symbol),
     Arr(Box<Type>, Box<Type>),
     App(Box<Type>, Box<Type>),
-    Poly(Vec<Symbol>, Box<Type>),
+    //Poly(Vec<Symbol>, Box<Type>),
+    Temp(usize),
 }
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
 pub enum TypeLit {
     Int,
     Real,
     Bool,
     Char,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Scheme {
+    Mono(Type),
+    Poly(Vec<Symbol>,Type),
 }
 
 /*
@@ -155,11 +157,7 @@ pub struct TypeApp {
 }
 */
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Scheme {
-    Mono(Type),
-    Poly(Vec<Symbol>,Type),
-}
+
 
 /*
 /// Interestingly, MLton immediately desugars tuples during parsing, rather than

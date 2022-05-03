@@ -1,5 +1,5 @@
 use crate::checker::Typable;
-use crate::types::Type;
+use crate::ast::types::*;
 use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::*;
@@ -13,7 +13,6 @@ impl Parsable for ExprVar {
         Ok(Box::new(ExprVar{ ident }))
     }
 }
-
 
 impl Typable for ExprVar {
     fn infer(&self, chk: &mut Checker) -> Result<Type,String> {
