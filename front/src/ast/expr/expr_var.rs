@@ -1,11 +1,11 @@
-use crate::checker::Typable;
-use crate::ast::types::*;
-use crate::utils::*;
-use crate::lexer::Token;
-use crate::parser::*;
-use crate::checker::*;
-
 use super::*;
+
+impl fmt::Display for ExprVar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"{}",self.ident)?;
+        Ok(())
+    }
+}
 
 impl Parsable for ExprVar {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {

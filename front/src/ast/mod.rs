@@ -1,5 +1,11 @@
 use crate::utils::*;
+use crate::lexer::Token;
+use crate::parser::{Parsable, Parser};
+use crate::checker::*;
 
+use std::fmt;
+
+use types::*;
 
 pub mod expr;
 pub mod types;
@@ -8,7 +14,6 @@ pub mod pattern;
 pub mod variant;
 pub mod rule;
 
-use types::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {

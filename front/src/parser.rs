@@ -183,7 +183,7 @@ impl<'src> Parser<'src> {
     }
 
     pub fn parse_sepby1<T: Parsable>(&mut self, delim: Token) -> Result<Vec<T>,String> {
-        let vec = self.parse_sepby1(delim)?;
+        let vec = self.parse_sepby(delim)?;
 
         if vec.len() >= 1 {
             Ok(vec)
@@ -203,7 +203,12 @@ impl<'src> Parser<'src> {
 fn parser_test() {
     let text = "fn f g x => (f x) g x";
     let mut par = Parser::new(text);
-    let res = Expr::parse(&mut par);
-    println!("{:?}", res);
+    let res = par.parse::<Expr>().unwrap();
+    println!("{}", res);
+
+    let text2 = "a => 1";
+    let mut par = Parser::new(text2);
+    let res = par.parse::<Rule>().unwrap();
+    println!("{}", res);
 
 }

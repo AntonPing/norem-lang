@@ -5,6 +5,13 @@ use crate::checker::*;
 
 use super::*;
 
+impl fmt::Display for Pattern {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"pattern")?;
+        Ok(())
+    }
+}
+
 impl Parsable for Pattern {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
 
@@ -54,3 +61,10 @@ fn start_of_pattern(par: &mut Parser) -> bool {
 }
 */
 
+#[test]
+fn parser_test() {
+    let text = "a";
+    let mut par = Parser::new(text);
+    let res = par.parse::<Pattern>().unwrap();
+    println!("{:?}", res);
+}

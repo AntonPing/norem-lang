@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::utils::*;
 use crate::lexer::Token;
 use crate::parser::{Parsable, Parser};
@@ -8,6 +10,12 @@ pub mod decl_val;
 pub mod decl_data;
 pub mod decl_type;
 
+impl fmt::Display for Decl {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"decl")?;
+        Ok(())
+    }
+}
 
 impl Parsable for Decl {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {

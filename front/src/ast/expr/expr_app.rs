@@ -1,9 +1,14 @@
-use crate::checker::*;
-use crate::utils::*;
-use crate::lexer::Token;
-use crate::parser::*;
-
 use super::*;
+
+impl fmt::Display for ExprApp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"{}", self.func)?;
+        for arg in &self.args {
+            write!(f," {}", arg)?;
+        }
+        Ok(())
+    }
+}
 
 impl Parsable for ExprApp {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
@@ -17,8 +22,6 @@ impl Parsable for ExprApp {
         Ok(Box::new(ExprApp { func, args }))
     }
 }
-
-
 
 /*
 struct ExprAppList(ExprApp);

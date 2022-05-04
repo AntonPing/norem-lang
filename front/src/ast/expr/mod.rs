@@ -1,15 +1,26 @@
-use crate::utils::*;
-use crate::lexer::Token;
-use crate::parser::{Parsable, Parser};
-use crate::checker::*;
 
 use super::*;
 
-pub mod lit;
-pub mod var;
-pub mod lam;
-pub mod app;
-pub mod lett;
+pub mod expr_lit;
+pub mod expr_var;
+pub mod expr_lam;
+pub mod expr_app;
+pub mod expr_let;
+pub mod expr_case;
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Expr::Lit(x) => { write!(f,"{}",*x)? }
+            Expr::Var(x) => { write!(f,"{}",*x)? }
+            Expr::Lam(x) => { write!(f,"{}",*x)? }
+            Expr::App(x) => {write!(f,"({})",*x)? }
+            Expr::Let(x) => { write!(f,"{}",*x)? }
+            Expr::Case(x) => { write!(f,"{}",*x)? }
+        }
+        Ok(())
+    }
+}
 
 impl Parsable for Expr {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
@@ -30,7 +41,15 @@ impl Parsable for Expr {
                 par.next()?;
                 let res = par.parse::<ExprApp>()?;
                 par.match_next(Token::RParen)?;
-                Ok(Box::new(Expr::App(res)))
+                if res.args.len() == 0 {
+                    Ok(res.func)
+                } else {
+                    Ok(Box::new(Expr::App(res)))
+                }
+            }
+            Token::Case => {
+                let res = par.parse::<ExprCase>()?;
+                Ok(Box::new(Expr::Case(res)))
             }
             _ => {
                 Err("Can't parse expression!".to_string())
@@ -70,4 +89,12 @@ impl Typable for Expr {
             _ => unimplemented!(),
         }
     }
+}
+
+#[test]
+fn parser_test() {
+    let text = "42";
+    let mut par = Parser::new(text);
+    let res = par.parse::<Expr>().unwrap();
+    println!("{}", res);
 }

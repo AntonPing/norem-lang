@@ -1,9 +1,15 @@
-use crate::utils::*;
-use crate::lexer::Token;
-use crate::parser::*;
-use crate::checker::*;
-
 use super::*;
+
+impl fmt::Display for ExprLam {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"fn")?;
+        for arg in &self.args {
+            write!(f," {}", arg)?;
+        }
+        write!(f," => {}", self.body)?;
+        Ok(())
+    }
+}
 
 impl Parsable for ExprLam {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {

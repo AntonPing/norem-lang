@@ -1,9 +1,15 @@
-use crate::utils::*;
-use crate::lexer::Token;
-use crate::parser::*;
-use crate::checker::*;
-
 use super::*;
+
+impl fmt::Display for ExprLet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"let ")?;
+        for decl in &self.decls {
+            writeln!(f,"{};", decl)?;
+        }
+        write!(f,"in {}", self.body)?;
+        Ok(())
+    }
+}
 
 impl Parsable for ExprLet {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {

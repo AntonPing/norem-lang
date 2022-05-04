@@ -1,9 +1,15 @@
-use crate::utils::*;
-use crate::lexer::Token;
-use crate::parser::*;
-use crate::checker::*;
-
 use super::*;
+
+impl fmt::Display for ExprLit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ExprLit::Int(x) => { write!(f,"{}",*x) }
+            ExprLit::Real(x) => { write!(f,"{}",*x) }
+            ExprLit::Bool(x) => { write!(f,"{}",*x) }
+            ExprLit::Char(x) => { write!(f,"{}",*x) }
+        }
+    }
+}
 
 impl Parsable for ExprLit {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {

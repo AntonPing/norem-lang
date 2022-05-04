@@ -58,7 +58,6 @@ pub fn is_reserved(str: &str) -> Option<Token> {
         "val" => Token::Val,
         "data" => Token::Data,
         "type" => Token::Type,
-        
         "case" => Token::Case,
         "of" => Token::Of,
         "true" => Token::Bool,
@@ -67,7 +66,6 @@ pub fn is_reserved(str: &str) -> Option<Token> {
         "Real" => Token::LitType,
         "Bool" => Token::LitType,
         "Char" => Token::LitType,
-
         _ => { return None; }
     };
     Some(tok)
@@ -96,6 +94,11 @@ impl<'src> Lexer<'src> {
 
     }
 
+    fn peek_char(&mut self) -> Option<char> {
+        let ch = self.stream.peek()?;
+        Some(*ch)
+    }
+
     fn next_char(&mut self) -> Option<char> {
         let ch = self.stream.next()?;
         self.pos += 1;
@@ -106,9 +109,30 @@ impl<'src> Lexer<'src> {
         Some(ch)
     }
 
-    fn peek_char(&mut self) -> Option<char> {
-        let ch = self.stream.peek()?;
-        Some(*ch)
+
+    fn peek_satisfy(&mut self, func: fn(char)->bool) -> Option<char> {
+        if let Some(ch) = self.peek_char() {
+            if func(ch) {
+                Some(ch)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    fn next_satisfy(&mut self, func: fn(char)->bool) -> Option<char> {
+        if let Some(ch) = self.peek_char() {
+            if func(ch) {
+                self.next_char();
+                Some(ch)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     fn comment_block(&mut self) -> Result<(),String> {
@@ -155,7 +179,6 @@ impl<'src> Lexer<'src> {
         while let Some(ch) = self.peek_char() {
             if ch.is_whitespace() {
                 self.next_char();
-                continue;
             } else {
                 break;
             }
@@ -245,14 +268,20 @@ impl<'src> Lexer<'src> {
                     &self.source[start..end]
                 ))
             }
-
+            Some('|') => {
+                let end = self.pos;
+                Ok((
+                    Token::Bar,
+                    Span::new(start, end),
+                    &self.source[start..end]
+                ))
+            }
             Some(x) if x.is_ascii_alphabetic() => {
                 let upper = x.is_uppercase();
 
                 while let Some(x) = self.peek_char() {
                     if x.is_ascii_alphanumeric() {
                         self.next_char();
-                        continue;
                     } else {
                         break;
                     }
@@ -275,8 +304,38 @@ impl<'src> Lexer<'src> {
                     ))
                 }  
             }
-            Some(x) if x.is_numeric() => {
-                todo!("int and real")
+            Some(x) if x.is_ascii_digit() => {
+
+                while let Some(x) = self.next_satisfy(
+                    |ch| ch.is_ascii_digit()) {}
+
+                if self.peek_char() != Some('.') {
+                    let end = self.pos;
+                    return Ok((
+                        Token::Int,
+                        Span::new(start, end),
+                        &self.source[start..end]
+                    ));
+                } else {
+                    self.next_char();
+                }
+
+                if let Some(x) = self.next_satisfy(
+                    |ch| ch.is_ascii_digit()) {
+                    // nothing
+                } else {
+                    return Err("Real number without fractional part!".to_string())
+                }
+
+                while let Some(x) = self.next_satisfy(
+                    |ch| ch.is_ascii_digit()) {}
+
+                let end = self.pos;
+                Ok((
+                    Token::Real,
+                    Span::new(start, end),
+                    &self.source[start..end]
+                ))
             }
             None => {
                 if self.is_end {
@@ -302,8 +361,8 @@ impl<'src> Lexer<'src> {
 
 #[test]
 fn lexer_test() {
-    // let string = "fn f x => { f 42 (true)}";
-    let string = "fn f g x => (f x) g x";
+    let string = "fn f x => (f 42 (true) 3.1415)";
+    //let string = "fn f g x => (f x) g x";
     let mut lex = Lexer::new(string);
 
     while let Ok(tok) = lex.next_token() {

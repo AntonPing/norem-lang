@@ -138,6 +138,14 @@ impl From<Symbol> for String {
 
 use crate::parser::*;
 use crate::lexer::*;
+
+impl fmt::Display for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"{}",self.0)?;
+        Ok(())
+    }
+}
+
 impl Parsable for Symbol {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
         let tok = par.next()?;
