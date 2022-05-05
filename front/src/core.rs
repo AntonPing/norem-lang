@@ -10,10 +10,10 @@ pub enum CoreExpr {
     Real(f64),
     Bool(bool),
     Char(char),
-
     Var(Symbol),
     Lam(Symbol,Box<CoreExpr>),
     App(Box<CoreExpr>,Box<CoreExpr>),
     Let(Vec<(Symbol,Box<CoreExpr>)>,Box<CoreExpr>),
+
     
 }
