@@ -206,9 +206,20 @@ fn parser_test() {
     let res = par.parse::<Expr>().unwrap();
     println!("{}", res);
 
-    let text2 = "a => 1";
-    let mut par = Parser::new(text2);
-    let res = par.parse::<Rule>().unwrap();
+    let text = "
+        let
+            val x = 42
+            type MyInt = Int
+            data Color = Red | Blue | Green
+        in
+            fn f y => f x
+        end
+    ";
+    let mut lex = Lexer::new(text);
+    while let Ok((tok,span,txt)) = lex.next_token() {
+        println!("{:?}, {:?}, {}",tok,span,txt);
+    }
+    let mut par = Parser::new(text);
+    let res = par.parse::<Expr>().unwrap();
     println!("{}", res);
-
 }

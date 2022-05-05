@@ -37,6 +37,10 @@ impl Parsable for Expr {
                 let res = par.parse::<ExprLam>()?;
                 Ok(Box::new(Expr::Lam(res)))
             }
+            Token::Let => {
+                let res = par.parse::<ExprLet>()?;
+                Ok(Box::new(Expr::Let(res)))
+            }
             Token::LParen => {
                 par.next()?;
                 let res = par.parse::<ExprApp>()?;
@@ -51,8 +55,12 @@ impl Parsable for Expr {
                 let res = par.parse::<ExprCase>()?;
                 Ok(Box::new(Expr::Case(res)))
             }
-            _ => {
-                Err("Can't parse expression!".to_string())
+            tok => {
+                Err(format!(
+                    "parse expression faile!\n
+                    unexcepted token {:?}",
+                &tok
+                ))
             }
         }
     }

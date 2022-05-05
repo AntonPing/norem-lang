@@ -85,6 +85,45 @@ impl Type {
 }
 
 
+impl fmt::Display for TypeLit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TypeLit::Int => { write!(f,"Int") }
+            TypeLit::Real => { write!(f,"Real") }
+            TypeLit::Bool => { write!(f,"Bool") }
+            TypeLit::Char => { write!(f,"Char") }
+        }
+    }
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Type::Lit(x) => {
+                write!(f,"{}",x)?;
+            }
+            Type::Cons(x) => {
+                write!(f,"{}",x)?;
+            }
+            Type::Var(x) => {
+                write!(f,"{}",x)?;
+            }
+            Type::Arr(a,b) => {
+                write!(f,"{} -> {}",a,b)?;
+            }
+            Type::App(a,b) => {
+                write!(f,"({} {})",a,b)?;
+            }
+            Type::Temp(x) => {
+                write!(f,"{}",x)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+
+
 impl Parsable for Type {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
         let vec0: Vec<SingleType> = par.parse_sepby1(Token::Arrow)?;
@@ -120,12 +159,13 @@ impl Parsable for SingleType {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
        let res = match par.peek()? {
             Token::LitType => {
+                par.next().unwrap();
                 let res = match par.text(0)? {
                     "Int" => { Type::Lit(TypeLit::Int) }
                     "Real" => { Type::Lit(TypeLit::Real) }
                     "Bool" => { Type::Lit(TypeLit::Bool) }
                     "Char" => { Type::Lit(TypeLit::Char) }
-                    _ => { panic!("Impossible!"); }
+                    _ => { panic!("Impossible LitType {}!",par.text(0)?); }
                 };
                 res
             }

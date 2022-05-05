@@ -7,7 +7,25 @@ use super::*;
 
 impl fmt::Display for Pattern {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,"pattern")?;
+        match self {
+            Pattern::Lit(x) => {
+                write!(f,"{}",x)?;
+            }
+            Pattern::Var(x) => {
+                write!(f,"{}",x)?;
+            }
+            Pattern::App(cons, args) => {
+                write!(f,"({}",cons)?;
+                for arg in args {
+                    write!(f," {}",arg)?;
+                }
+                write!(f,")")?;
+            }
+            Pattern::Wild => {
+                write!(f,"_")?;
+            }
+
+        }
         Ok(())
     }
 }
@@ -33,6 +51,7 @@ impl Parsable for Pattern {
                 Ok(Box::new(Pattern::App(con, args)))
             }
             Token::LParen => {
+                par.next().unwrap();
                 let pat: Pattern = par.parse()?;
                 par.match_next(Token::RParen)?;
                 Ok(Box::new(pat))
@@ -63,7 +82,7 @@ fn start_of_pattern(par: &mut Parser) -> bool {
 
 #[test]
 fn parser_test() {
-    let text = "a";
+    let text = "(Cons a (Cons 42 Nil))";
     let mut par = Parser::new(text);
     let res = par.parse::<Pattern>().unwrap();
     println!("{:?}", res);

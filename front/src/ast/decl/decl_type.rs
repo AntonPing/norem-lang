@@ -1,9 +1,15 @@
-use crate::utils::*;
-use crate::lexer::Token;
-use crate::parser::{Parsable, Parser};
-use crate::checker::*;
-
 use super::*;
+
+impl fmt::Display for DeclType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"type {}", self.name)?;
+        for arg in &self.args {
+            write!(f," {}", arg)?;
+        }
+        write!(f," = {};", self.typ)?;
+        Ok(())
+    }
+}
 
 
 impl Parsable for DeclType {

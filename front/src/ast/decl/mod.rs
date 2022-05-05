@@ -12,8 +12,11 @@ pub mod decl_type;
 
 impl fmt::Display for Decl {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,"decl")?;
-        Ok(())
+        match self {
+            Decl::Val(x) => { write!(f,"{}",x) }
+            Decl::Data(x) => { write!(f,"{}",x) }
+            Decl::Type(x) => { write!(f,"{}",x) }
+        }
     }
 }
 

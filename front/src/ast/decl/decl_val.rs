@@ -1,10 +1,15 @@
-use crate::utils::*;
-use crate::lexer::Token;
-use crate::parser::{Parsable, Parser};
-use crate::checker::*;
-
 use super::*;
 
+impl fmt::Display for DeclVal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"val {}", self.name)?;
+        for arg in &self.args {
+            write!(f," {}", arg)?;
+        }
+        write!(f," = {};", self.body)?;
+        Ok(())
+    }
+}
 
 impl Parsable for DeclVal {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
@@ -25,3 +30,10 @@ impl Parsable for DeclVal {
     }
 }
 
+#[test]
+fn parser_test() {
+    let text = "val x y = 42";
+    let mut par = Parser::new(text);
+    let res = par.parse::<DeclVal>().unwrap();
+    println!("{}", res);
+}

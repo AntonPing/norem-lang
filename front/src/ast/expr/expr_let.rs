@@ -6,7 +6,7 @@ impl fmt::Display for ExprLet {
         for decl in &self.decls {
             writeln!(f,"{};", decl)?;
         }
-        write!(f,"in {}", self.body)?;
+        write!(f,"in {} end", self.body)?;
         Ok(())
     }
 }
@@ -23,6 +23,8 @@ impl Parsable for ExprLet {
         par.match_next(Token::In)?;
 
         let body = par.parse::<Expr>()?;
+
+        par.match_next(Token::End)?;
 
         let body = Box::new(body);
 
@@ -61,3 +63,20 @@ impl Typable for ExprLet {
     }
 }
 */
+
+
+
+#[test]
+fn parser_test() {
+    let text = "
+        let
+            val x = 42
+            type MyInt = Int
+        in
+            x
+        end
+    ";
+    let mut par = Parser::new(text);
+    let res = par.parse::<Expr>().unwrap();
+    println!("{}", res);
+}
