@@ -30,6 +30,29 @@ impl Parsable for DeclVal {
     }
 }
 
+impl Checkable for DeclVal {
+    fn check(&self, chk: &mut Checker) -> Result<(),String> {
+
+        let mut body2 = self.body.clone();
+
+        for arg in &self.args {
+            vec.push(arg.clone());
+        }
+
+        if !no_repeat(vec) {
+            return Err("repeated name in val decl!".to_string());
+        }
+
+
+        
+
+        chk.var_env().update(self.name, res_ty);
+
+        Ok(())        
+    }
+}
+
+
 #[test]
 fn parser_test() {
     let text = "val x y = 42";

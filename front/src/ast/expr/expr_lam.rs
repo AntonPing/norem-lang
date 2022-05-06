@@ -33,17 +33,14 @@ impl Parsable for ExprLam {
 impl Typable for ExprLam {
     fn infer(&self, chk: &mut Checker) -> Result<Type,String> {
         
-        let mut record = Vec::new();
+        let mut mark = chk.var_env().backup();
         
         let mut args_ty = Vec::new();
         for arg in &self.args {
             let new_ty = Type::Temp(chk.newvar());
             args_ty.push(new_ty.clone());
-            
-            if let Some(old) = chk.environment
-                .insert(arg.clone(), Scheme::Mono(new_ty)) {    
-                record.push((arg.clone(),old));
-            }
+            chk.var_env().update(arg.clone(), 
+                Scheme::Mono(new_ty));
         }
 
         let body_ty = self.body.infer(chk)?;
@@ -53,6 +50,8 @@ impl Typable for ExprLam {
             .fold(body_ty, |ty1,ty2| {
                 Type::Arr(Box::new(ty2), Box::new(ty1))
             });
+        
+        chk.var_env().recover(mark);
 
         Ok(res_ty)
 

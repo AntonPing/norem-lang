@@ -212,7 +212,11 @@ fn parser_test() {
             type MyInt = Int
             data Color = Red | Blue | Green
         in
-            fn f y => f x
+            case c of
+            | Red => 1
+            | Blue => 2
+            | Green => 3
+            end
         end
     ";
     let mut lex = Lexer::new(text);

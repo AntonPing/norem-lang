@@ -33,36 +33,33 @@ impl Parsable for ExprLet {
     }
 }
 
-/*
 impl Typable for ExprLet {
-    fn infer(&self, chk: &mut Checker) -> Result<TypeVar,String> {
-        
-        let mut record = Vec::new();
-        
-        let mut args_ty = Vec::new();
-        for arg in &self.args {
-            let new_ty = TypeVar::Var(chk.newvar());
-            args_ty.push(new_ty.clone());
-            
-            if let Some(old) = chk.environment
-                .insert(arg.clone(), Scheme::Mono(new_ty)) {    
-                record.push((arg.clone(),old));
+    fn infer(&self, chk: &mut Checker) -> Result<Type,String> {
+
+        let mark1 = chk.var_env().backup();
+        let mark2 = chk.cons_env().backup();
+        let mark3 = chk.type_env().backup();
+
+        for decl in self.decls {
+            match self {
+                Decl::Val(x) => {
+                    let var = Type::Temp(chk.newvar());
+                    chk.var_env().update(x.name, var);
+                }
+                Decl::Data(x) => { &x.name }
+                Decl::Type(x) => { &x.name }
             }
         }
 
         let body_ty = self.body.infer(chk)?;
 
-        let res_ty = args_ty
-            .into_iter().rev()
-            .fold(body_ty, |ty1,ty2| {
-                TypeVar::Arr(Box::new(ty2), Box::new(ty1))
-            });
+        chk.var_env().recover(mark1);
+        chk.cons_env().recover(mark2);
+        chk.type_env().recover(mark3);
 
-        Ok(res_ty)
-
+        Ok(body_ty)
     }
 }
-*/
 
 
 

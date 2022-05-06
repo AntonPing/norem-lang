@@ -18,7 +18,10 @@ impl Typable for ExprVar {
     fn infer(&self, chk: &mut Checker) -> Result<Type,String> {
         let sc = chk.lookup(&self.ident)?;
         let ty = chk.instantiate(&sc);
-        Ok(ty)
-        // todo: occur check
+        if chk.occur_check(&self.ident, &ty) {
+            Err("Occur check failed!".to_string())
+        } else {
+            Ok(ty)
+        }  
     }
 }

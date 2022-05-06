@@ -206,6 +206,17 @@ impl<T> MultiSet<T> where T: Hash + Eq {
     }
 }
 
+pub fn no_repeat<T:Eq>(vec: Vec<T>) -> bool {
+    for i in 0..vec.len() {
+        for j in i..vec.len() {
+            if vec[i] == vec[j] {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 /*
 impl<T> IntoIterator for MultiSet<T> {
     type Item = (T,usize) ;

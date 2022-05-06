@@ -7,7 +7,7 @@ impl fmt::Display for DeclData {
         for arg in &self.args {
             write!(f," {}", arg)?;
         }
-        write!(f,"= {}", &self.vars[0])?;
+        write!(f," = {}", &self.vars[0])?;
         for var in &self.vars[1..] {
             write!(f," | {}", var)?;
         }

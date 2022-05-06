@@ -10,6 +10,16 @@ pub mod decl_val;
 pub mod decl_data;
 pub mod decl_type;
 
+impl Decl {
+    pub fn get_name(&self) -> &Symbol {
+        match self {
+            Decl::Val(x) => { &x.name }
+            Decl::Data(x) => { &x.name }
+            Decl::Type(x) => { &x.name }
+        }
+    }
+}
+
 impl fmt::Display for Decl {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

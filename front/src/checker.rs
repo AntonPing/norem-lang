@@ -1,53 +1,126 @@
 use std::collections::HashMap;
+use std::hash::Hash;
 
 use crate::utils::*;
 use crate::ast::*;
 
-/*
 pub trait Checkable {
-    type Record;
-    fn check_enter(&self, chk: &mut Checker) -> Self::Record;
-    fn check_body(&self, chk:&mut Checker) -> Result<(), String>;
-    fn check_quit(&self, chk: &mut Checker, rec: Self::Record);
-    fn check(&self, chk: &mut Checker) -> Result<(),String> {
-        let rec = self.check_enter(chk);
-        self.check_body(chk)?;
-        self.check_quit(chk, rec);
-        Ok(())
-    }
+    fn check(&self, chk: &mut Checker) -> Result<(),String>;
 }
-*/
 
 pub trait Typable {
     fn infer(&self, chk: &mut Checker) -> Result<Type,String>;
-    /*
-    fn infer(&self, chk: &mut Checker) -> Result<TypeVar,String> {
-        let rec = self.check_enter(chk);
-        self.check_body(chk)?;
-        let ty = self.infer_body(chk)?;
-        self.check_quit(chk, rec);
-        Ok(ty)
-    }
-    */
 }
 
+#[derive(Clone, Debug, PartialEq)]
+enum EnvOp<K,V> {
+    // has such key, old value covered
+    Update(K,V),
+    // has no such key, the key was inserted
+    Insert(K),
+    // symbol was deleted from env
+    Delete(K,V),
+    // symbol not in env, no need to delete
+    Nothing,
+}
+
+#[derive(Clone, Debug)]
+pub struct Env<K,V> {
+    context: HashMap<K,V>,
+    history: Vec<EnvOp<K,V>>,
+}
+
+impl<K,V> Env<K,V> where K: Eq + Hash + Clone {
+    pub fn new() -> Env<K,V> {
+        Env {
+            context: HashMap::new(),
+            history: Vec::new()
+        }
+    }
+
+    pub fn contains(&self, key: &K) -> bool {
+        self.context.contains_key(key)
+    }
+
+    pub fn lookup(&self, key: &K) -> Option<&V> {
+        self.context.get(key)
+    }
+
+    pub fn update(&mut self, key: K, val: V) {
+        if let Some(old) = self.context.insert(key.clone(),val) {
+            self.history.push(EnvOp::Update(key,old));
+        } else {
+            self.history.push(EnvOp::Insert(key));
+        }
+    }
+
+    pub fn delete(&mut self, key: K) {
+        if let Some(old) = self.context.remove(&key) {
+            self.history.push(EnvOp::Delete(key,old));
+        } else {
+            self.history.push(EnvOp::Nothing);
+        }
+    }
+
+    pub fn backup(&self) -> usize {
+        self.history.len()
+    }
+
+    pub fn recover(&mut self, mark: usize) {
+        for _ in mark..self.history.len() {
+            if let Some(op) = self.history.pop() {
+                match op {    
+                    EnvOp::Update(k,v) => {
+                        let r = self.context.insert(k,v);
+                        assert!(r.is_some());
+                    }
+                    EnvOp::Insert(k) => {
+                        let r = self.context.remove(&k);
+                        assert!(r.is_some());
+                    }
+                    EnvOp::Delete(k,v) => {
+                        let r = self.context.insert(k,v);
+                        assert!(r.is_none());
+                    }
+                    EnvOp::Nothing => {
+                        // Well, Nothing...
+                    }
+                }
+            } else {
+                panic!("history underflow!");
+            }
+        }
+    }
+}
+
+
 pub struct Checker {
-    var_env: MultiSet<Symbol>,
-    cons_env: MultiSet<Symbol>,
-    type_env: MultiSet<Symbol>,
-    pub environment: HashMap<Symbol,Scheme>,
+    var_env: Env<Symbol,Scheme>,
+    cons_env: Env<Symbol,(Variant,Type)>,
+    type_env: Env<Symbol,Type>,
     arena: Vec<Option<Type>>
 }
 
 impl Checker {
     pub fn new() -> Checker {
         Checker {
-            var_env: MultiSet::new(),
-            cons_env: MultiSet::new(),
-            type_env: MultiSet::new(),
-            environment: HashMap::new(),
+            var_env: Env::new(),
+            cons_env: Env::new(),
+            type_env: Env::new(),
             arena: Vec::new(),
         }
+    }
+
+    pub fn cons_env(&mut self) -> &mut Env<Symbol,(Variant,Type)> {
+        &mut self.cons_env
+    }
+
+    pub fn type_env(&mut self) -> &mut Env<Symbol,Type> {
+        &mut self.type_env
+    }
+
+    pub fn var_env(&mut self) -> &mut Env<Symbol,Scheme> {
+        &mut self.var_env
     }
 
     pub fn newvar(&mut self) -> usize {
@@ -66,7 +139,7 @@ impl Checker {
     }
 
     pub fn lookup(&self, x: &Symbol) -> Result<Scheme,String> {
-        if let Some(sc) = self.environment.get(x) {
+        if let Some(sc) = self.var_env.lookup(x) {
             Ok(sc.clone())
         } else {
             Err("variable not found in scope!".to_string())
@@ -75,6 +148,31 @@ impl Checker {
 
     pub fn is_unbind(&self, n: usize) -> bool {
         self.arena[n].is_none()
+    }
+
+    pub fn occur_check(&self, x: &Symbol, ty: &Type) -> bool {
+        match ty {
+            Type::Lit(_) => { false }
+            Type::Cons(_) => { false }
+            Type::Var(y) => {
+                x == y
+            }
+            Type::Arr(ty1,ty2) => {
+                self.occur_check(x, ty1)
+                && self.occur_check(x, ty2)
+            }
+            Type::App(ty1, ty2) => {
+                self.occur_check(x, ty1)
+                && self.occur_check(x, ty2)
+            }
+            Type::Temp(n) => {
+                if let Some(ty2) = &self.arena[*n] {
+                    self.occur_check(x, &ty2)
+                } else {
+                    false
+                }
+            }
+        }
     }
 
     fn freevar(&self, ty: &Type) -> Vec<Symbol> {

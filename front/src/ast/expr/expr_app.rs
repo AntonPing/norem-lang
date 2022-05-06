@@ -75,8 +75,7 @@ impl Typable for ExprApp {
 
         let mut args_ty = Vec::new();
         for arg in &self.args {
-            let arg_ty = arg.infer(chk)?;
-            args_ty.push(arg_ty);
+            args_ty.push(arg.infer(chk)?);
         }
 
         let res_ty = Type::Temp(chk.newvar());
@@ -86,7 +85,6 @@ impl Typable for ExprApp {
             .fold(res_ty.clone(), |ty1, ty2| {
                 Type::Arr(Box::new(ty2), Box::new(ty1))
             });
-        
         
         chk.unify(&func_ty, &func_ty_2)?;
 
