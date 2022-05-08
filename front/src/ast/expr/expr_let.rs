@@ -35,7 +35,8 @@ impl Parsable for ExprLet {
 
 impl Typable for ExprLet {
     fn infer(&self, chk: &mut Checker) -> Result<Type,String> {
-
+        unimplemented!();
+        /*
         let mark1 = chk.var_env().backup();
         let mark2 = chk.cons_env().backup();
         let mark3 = chk.type_env().backup();
@@ -58,10 +59,15 @@ impl Typable for ExprLet {
         chk.type_env().recover(mark3);
 
         Ok(body_ty)
+        */
     }
 }
 
-
+impl TransCore for ExprLet {
+    fn translate(&self, trs: &mut Translator) -> Result<CoreExpr,String> {
+        unimplemented!()
+    }
+}
 
 #[test]
 fn parser_test() {

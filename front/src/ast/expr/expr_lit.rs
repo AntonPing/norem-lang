@@ -45,3 +45,14 @@ impl Typable for ExprLit {
         }
     }
 }
+
+impl TransCore for ExprLit {
+    fn translate(&self, trs: &mut Translator) -> Result<CoreExpr,String> {
+        match self {
+            ExprLit::Int(x) => Ok(CoreExpr::Int(*x)),
+            ExprLit::Real(x) => Ok(CoreExpr::Real(*x)),
+            ExprLit::Char(x) => Ok(CoreExpr::Char(*x)),
+            ExprLit::Bool(x) => Ok(CoreExpr::Bool(*x)),
+        }
+    }
+}

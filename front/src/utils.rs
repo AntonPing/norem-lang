@@ -217,6 +217,89 @@ pub fn no_repeat<T:Eq>(vec: Vec<T>) -> bool {
     return true;
 }
 
+
+#[derive(Clone, Debug, PartialEq)]
+enum EnvOp<K,V> {
+    // has such key, old value covered
+    Update(K,V),
+    // has no such key, the key was inserted
+    Insert(K),
+    // symbol was deleted from env
+    Delete(K,V),
+    // symbol not in env, no need to delete
+    Nothing,
+}
+
+
+#[derive(Clone, Debug)]
+pub struct Env<K,V> {
+    context: HashMap<K,V>,
+    history: Vec<EnvOp<K,V>>,
+}
+
+impl<K,V> Env<K,V> where K: Eq + Hash + Clone {
+    pub fn new() -> Env<K,V> {
+        Env {
+            context: HashMap::new(),
+            history: Vec::new()
+        }
+    }
+
+    pub fn contains(&self, key: &K) -> bool {
+        self.context.contains_key(key)
+    }
+
+    pub fn lookup(&self, key: &K) -> Option<&V> {
+        self.context.get(key)
+    }
+
+    pub fn update(&mut self, key: K, val: V) {
+        if let Some(old) = self.context.insert(key.clone(),val) {
+            self.history.push(EnvOp::Update(key,old));
+        } else {
+            self.history.push(EnvOp::Insert(key));
+        }
+    }
+
+    pub fn delete(&mut self, key: K) {
+        if let Some(old) = self.context.remove(&key) {
+            self.history.push(EnvOp::Delete(key,old));
+        } else {
+            self.history.push(EnvOp::Nothing);
+        }
+    }
+
+    pub fn backup(&self) -> usize {
+        self.history.len()
+    }
+
+    pub fn recover(&mut self, mark: usize) {
+        for _ in mark..self.history.len() {
+            if let Some(op) = self.history.pop() {
+                match op {    
+                    EnvOp::Update(k,v) => {
+                        let r = self.context.insert(k,v);
+                        assert!(r.is_some());
+                    }
+                    EnvOp::Insert(k) => {
+                        let r = self.context.remove(&k);
+                        assert!(r.is_some());
+                    }
+                    EnvOp::Delete(k,v) => {
+                        let r = self.context.insert(k,v);
+                        assert!(r.is_none());
+                    }
+                    EnvOp::Nothing => {
+                        // Well, Nothing...
+                    }
+                }
+            } else {
+                panic!("history underflow!");
+            }
+        }
+    }
+}
+
 /*
 impl<T> IntoIterator for MultiSet<T> {
     type Item = (T,usize) ;

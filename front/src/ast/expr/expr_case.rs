@@ -36,6 +36,12 @@ impl Typable for ExprCase {
     }
 }
 
+impl TransCore for ExprCase {
+    fn translate(&self, trs: &mut Translator) -> Result<CoreExpr,String> {
+        unimplemented!()
+    }
+}
+
 #[test]
 fn parser_test() {
     let text = "case 42 of | a => 1 | b => 2";

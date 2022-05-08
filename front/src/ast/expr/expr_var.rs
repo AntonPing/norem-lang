@@ -25,3 +25,9 @@ impl Typable for ExprVar {
         }  
     }
 }
+
+impl TransCore for ExprVar {
+    fn translate(&self, trs: &mut Translator) -> Result<CoreExpr,String> {
+        Ok(CoreExpr::Var(self.ident.clone()))
+    }
+}

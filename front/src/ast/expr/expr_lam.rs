@@ -39,8 +39,7 @@ impl Typable for ExprLam {
         for arg in &self.args {
             let new_ty = Type::Temp(chk.newvar());
             args_ty.push(new_ty.clone());
-            chk.var_env().update(arg.clone(), 
-                Scheme::Mono(new_ty));
+            chk.var_env().update(arg.clone(), Scheme::Mono(new_ty));
         }
 
         let body_ty = self.body.infer(chk)?;
@@ -55,5 +54,18 @@ impl Typable for ExprLam {
 
         Ok(res_ty)
 
+    }
+}
+
+impl TransCore for ExprLam {
+    fn translate(&self, trs: &mut Translator) -> Result<CoreExpr,String> {
+        let ExprLam { args, body } = self;
+        let mut temp = body.translate(trs)?;
+
+        for arg in args.iter().rev() {
+            temp = CoreExpr::Lam(arg.clone(), Box::new(temp));
+        }
+
+        Ok(temp)
     }
 }

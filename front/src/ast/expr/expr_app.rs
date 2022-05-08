@@ -1,3 +1,5 @@
+
+
 use super::*;
 
 impl fmt::Display for ExprApp {
@@ -12,7 +14,8 @@ impl fmt::Display for ExprApp {
 
 impl Parsable for ExprApp {
     fn parse(par: &mut Parser) -> Result<Box<Self>,String> {
-        let func = Expr::parse(par)?;
+        let func = par.parse::<Expr>()?;
+        let func = Box::new(func);
 
         let args = par.parse_many::<Expr>(&vec![
             Token::Int, Token::Real, Token::Char, Token::Bool,
@@ -89,5 +92,19 @@ impl Typable for ExprApp {
         chk.unify(&func_ty, &func_ty_2)?;
 
         Ok(res_ty)
+    }
+}
+
+impl TransCore for ExprApp {
+    fn translate(&self, trs: &mut Translator) -> Result<CoreExpr,String> {
+        let ExprApp { func, args } = self;
+        let mut temp = func.translate(trs)?;
+
+        for arg in args {
+            temp = CoreExpr::App(Box::new(temp),
+                Box::new(arg.translate(trs)?));
+        }
+
+        Ok(temp)
     }
 }

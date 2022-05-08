@@ -32,7 +32,7 @@ impl Parsable for DeclVal {
 
 impl Checkable for DeclVal {
     fn check(&self, chk: &mut Checker) -> Result<(),String> {
-
+        /*
         let mut body2 = self.body.clone();
 
         for arg in &self.args {
@@ -47,6 +47,7 @@ impl Checkable for DeclVal {
         
 
         chk.var_env().update(self.name, res_ty);
+        */
 
         Ok(())        
     }

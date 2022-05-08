@@ -66,27 +66,6 @@ impl Parsable for Expr {
     }
 }
 
-/*
-impl Expr {
-    pub fn expr_start(tok: Token) -> bool {
-        match tok {
-            Token::Int |
-            Token::Real | 
-            Token::Char |
-            Token::Bool |
-            Token::Var |
-            Token::Fn |
-            Token::LParen => {
-                true
-            }
-            _ => {
-                false
-            }
-        }
-    }
-}
-*/
-
 impl Typable for Expr {
     fn infer(&self, chk: &mut Checker) -> Result<Type,String> {
         match self {
@@ -94,6 +73,18 @@ impl Typable for Expr {
             Expr::Var(x) => x.infer(chk),
             Expr::Lam(x) => x.infer(chk),
             Expr::App(x) => x.infer(chk),
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl TransCore for Expr {
+    fn translate(&self, trs: &mut Translator) -> Result<CoreExpr,String> {
+        match self {
+            Expr::Lit(x) => x.translate(trs),
+            Expr::Var(x) => x.translate(trs),
+            Expr::Lam(x) => x.translate(trs),
+            Expr::App(x) => x.translate(trs),
             _ => unimplemented!(),
         }
     }
