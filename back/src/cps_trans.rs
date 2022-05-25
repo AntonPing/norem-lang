@@ -153,7 +153,7 @@ impl Optimizer {
     }
 
     pub fn get_body(&mut self, ins: InstrId) -> InstrBody {
-        self.instr_arena[ins].body
+        self.instr_arena[ins].body.clone()
     }
 
     pub fn set_body(&mut self, ins: InstrId, body: InstrBody) {
@@ -188,6 +188,8 @@ impl Optimizer {
     }
 
     pub fn delete_instr(&mut self, ins: InstrId) {
+        let block = self.get_block(ins);
+
         match (self.get_last(ins), self.get_next(ins)) {
             (Some(last),Some(next)) => {
                 self.set_next(last, Some(next));
@@ -195,11 +197,11 @@ impl Optimizer {
             }
             (Some(last), None) => {
                 self.set_next(last, None);
-                self.set_end(self.get_block(ins), last);
+                self.set_end(block, last);
             }
             (None, Some(next)) => {
                 self.instr(next).last = None;
-                self.set_start(self.get_block(ins), next);
+                self.set_start(block, next);
             }
             (None, None) => {
                 panic!("empty block!")
@@ -209,8 +211,10 @@ impl Optimizer {
 
     pub fn insert_instr(&mut self, ins: InstrId, body: InstrBody) -> InstrId {
         
-        let mut new = self.new_instr(body);
-        self.set_block(new, self.get_block(ins));
+        let new = self.new_instr(body);
+
+        let block = self.get_block(ins);
+        self.set_block(new, block);
 
         if let Some(next) = self.get_next(ins) {
             self.set_next(ins, Some(new));
@@ -221,17 +225,20 @@ impl Optimizer {
             self.set_next(ins, Some(new));
             self.set_last(new, Some(ins));
             self.set_next(new, None);
-            self.set_end(self.get_block(ins), new);
+            self.set_end(block, new);
         }
 
         new
     }
 
-    pub fn subst_instr(&mut self, ins1: InstrId, ins2: InstrId) {
+    pub fn update_instr(&mut self, ins1: InstrId, ins2: InstrId) {
         assert_eq!(self.get_block(ins1),self.get_block(ins2));
         
-        self.set_last(ins2, self.get_last(ins1));
-        self.set_next(ins2, self.get_next(ins1));
+        let last = self.get_last(ins1);
+        self.set_last(ins2, last);
+        
+        let next = self.get_next(ins1);
+        self.set_next(ins2, next);
 
         if let Some(last) = self.get_last(ins1) {
             self.set_next(last, Some(ins2));
