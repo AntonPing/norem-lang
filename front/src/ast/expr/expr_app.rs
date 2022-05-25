@@ -98,11 +98,14 @@ impl Typable for ExprApp {
 impl TransCore for ExprApp {
     fn translate(&self, trs: &mut Translator) -> Result<CoreExpr,String> {
         let ExprApp { func, args } = self;
+        
         let mut temp = func.translate(trs)?;
 
         for arg in args {
-            temp = CoreExpr::App(Box::new(temp),
-                Box::new(arg.translate(trs)?));
+            temp = CoreExpr::App(
+                Box::new(temp),
+                Box::new(arg.translate(trs)?)
+            );
         }
 
         Ok(temp)

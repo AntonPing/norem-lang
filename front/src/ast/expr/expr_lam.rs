@@ -60,6 +60,7 @@ impl Typable for ExprLam {
 impl TransCore for ExprLam {
     fn translate(&self, trs: &mut Translator) -> Result<CoreExpr,String> {
         let ExprLam { args, body } = self;
+        
         let mut temp = body.translate(trs)?;
 
         for arg in args.iter().rev() {

@@ -38,7 +38,14 @@ impl Typable for ExprCase {
 
 impl TransCore for ExprCase {
     fn translate(&self, trs: &mut Translator) -> Result<CoreExpr,String> {
-        unimplemented!()
+        let ExprCase { expr, rules } = self;
+
+        let expr = expr.translate(trs)?;
+
+        unimplemented!();
+
+
+
     }
 }
 
