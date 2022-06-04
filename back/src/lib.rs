@@ -6,5 +6,6 @@
 // pub mod eval;
 
 // pub mod cps;
-pub mod cps_trans;
+pub mod optimizer;
 pub mod const_fold;
+pub mod pretty;

@@ -1,12 +1,9 @@
-use std::cell::RefCell;
 use std::fmt::{self, Formatter, Display};
 use std::io::{self, Write};
 use std::collections::VecDeque;
 use std::ops::Deref;
-use std::rc::Rc;
 
-use crate::symbol::*;
-use crate::ast::*;
+use crate::optimizer::{InstrBody, Atom};
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 enum Command {
@@ -23,21 +20,16 @@ pub struct PrettyPrinter {
     indent: usize,
     width: usize,
     max_width: usize,
-    table: Rc<RefCell<SymTable>>,
     commands: VecDeque<Command>,
 }
 
 impl PrettyPrinter {
-    pub fn new(
-        max: usize,
-        table: Rc<RefCell<SymTable>>
-    ) -> PrettyPrinter {
+    pub fn new(max: usize) -> PrettyPrinter {
 
         PrettyPrinter {
             indent: 0,
             width: 0,
             max_width: max,
-            table: table,
             commands: VecDeque::new(),
         }
     }
@@ -176,5 +168,60 @@ pub trait Print {
 impl<T: fmt::Display> Print for T {
     fn print(&self, pp: &mut PrettyPrinter) {
         pp.text(self.to_string());
+    }
+}
+
+impl Print for Atom {
+    fn print(&self, pp: &mut PrettyPrinter) {
+        match self {
+            Atom::Var(x) => {
+                pp.text(format!("{}",x));
+            }
+            Atom::Label(x) => {
+                pp.text(format!("{}",x));
+            }
+            Atom::Int(x) => {
+                pp.text(format!("{}",x));
+            }
+            Atom::Real(x) => {
+                pp.text(format!("{}",x));
+            }
+            Atom::Bool(x) => {
+                pp.text(format!("{}",x));
+            }
+            Atom::Char(x) => {
+                pp.text(format!("{}",x));
+            }
+        }
+    }
+}
+
+
+impl Print for InstrBody {
+    fn print(&self, pp: &mut PrettyPrinter) {
+        match self {
+            InstrBody::Goto(k, args) => {
+                pp.text("Goto ");
+                pp.print(k);
+                pp.print_many(args, &", ");
+            }
+            InstrBody::IAdd(r, x, y) => {
+                pp.print(r);
+                pp.text(" <- iAdd ");
+                pp.print(x);
+                pp.text(",");
+                pp.print(y);
+            }
+            InstrBody::ISub(r, x, y) => {
+                pp.print(r);
+                pp.text(" <- iSub ");
+                pp.print(x);
+                pp.text(",");
+                pp.print(y);
+            }
+            InstrBody::Ifte(_, _, _) => todo!(),
+            InstrBody::Switch(_, _) => todo!(),
+            InstrBody::Halt(_) => todo!(),
+        }
     }
 }

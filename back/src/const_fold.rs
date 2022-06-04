@@ -1,7 +1,7 @@
-use crate::cps_trans::*;
+use crate::optimizer::*;
 
-use crate::cps_trans::Atom::*;
-use crate::cps_trans::InstrBody::*;
+use crate::optimizer::Atom::*;
+use crate::optimizer::InstrBody::*;
 
 impl Optimizer {
 
@@ -11,14 +11,14 @@ impl Optimizer {
                 assert!(self.get_next(ins).is_some());
                 self.delete_instr(ins);
                 let next = self.get_next(ins).unwrap();
-                self.instr_subst(next, r, Int(x + y));
+                self.instr_subst(next, &r, Int(x + y));
                 next
             }
             ISub(r, Int(x), Int(y)) => {
                 assert!(self.get_next(ins).is_some());
                 self.delete_instr(ins);
                 let next = self.get_next(ins).unwrap();
-                self.instr_subst(ins, r, Int(x - y));
+                self.instr_subst(ins, &r, Int(x - y));
                 next
             }
             Ifte(Bool(p), trbr, flbr) => {
@@ -43,7 +43,7 @@ impl Optimizer {
         }
     }
 
-    pub fn instr_subst(&mut self, ins: InstrId, name: Symbol, value: Atom) {
+    pub fn instr_subst(&mut self, ins: InstrId, name: &Symbol, value: Atom) {
         let mut with = ins;
         loop {
             match &mut self.get_body(with) {
@@ -56,12 +56,12 @@ impl Optimizer {
                 IAdd(r,x,y) => {
                     x.subst(name, value);
                     y.subst(name, value);
-                    if *r == name { break; }
+                    if *r == *name { break; }
                 }
                 ISub(r, x, y) => {
                     x.subst(name, value);
                     y.subst(name, value);
-                    if *r == name { break; }
+                    if *r == *name { break; }
                 }
                 Ifte(p, trbr, flbr) => {
                     p.subst(name, value);

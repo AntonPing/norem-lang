@@ -30,9 +30,9 @@ pub enum Atom {
 }
 
 impl Atom {
-    pub fn subst(&mut self, name: Symbol, value: Atom) {
+    pub fn subst(&mut self, name: &Symbol, value: Atom) {
         if let Atom::Var(x) = self {
-            if *x == name {
+            if *x == *name {
                 *self = value;
             }
         }
@@ -61,9 +61,8 @@ pub enum InstrBody {
     Halt(Atom),
 }
 
-
 impl InstrBody {
-    pub fn subst(&mut self, name: Symbol, value: Atom) {
+    pub fn subst(&mut self, name: &Symbol, value: Atom) {
         match self {
             InstrBody::Goto(k, args) => {
                 k.subst(name, value);
