@@ -7,7 +7,7 @@ mod pretty;
 mod lexer;
 mod parser;
 mod cps_trans;
-mod subst;
+mod visitor;
 
 fn main() {
     println!("Hello, world!");

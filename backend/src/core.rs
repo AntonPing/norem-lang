@@ -52,7 +52,7 @@ pub enum CExpr {
     Switch(Atom,Vec<CExpr>),
     Ifte(Atom,Box<CExpr>,Box<CExpr>),
     Record(Vec<Atom>,Symbol,Box<CExpr>),
-    Select(usize,Vec<CExpr>),
+    Select(usize,Atom,Symbol,Box<CExpr>),
     Halt(Atom),
     Tag(Tag,Box<CExpr>),
 }

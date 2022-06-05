@@ -2,6 +2,7 @@ use logos::Lexer;
 
 use crate::symbol::{Symbol, newvar, genvar};
 use crate::core::*;
+use crate::visitor::subst_expr;
 
 pub struct CpsTrans {
     // return stack
@@ -25,8 +26,8 @@ pub fn cps_trans(expr: &LExpr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
             let funcvar = genvar('f');
             let mut argsvar = Vec::new();
             argsvar.push(k);
-            for _ in args {
-                argsvar.push(genvar('x'));
+            for arg in args {
+                argsvar.push(*arg);
             }
 
             // eval the body and apply the result to k
@@ -46,7 +47,7 @@ pub fn cps_trans(expr: &LExpr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
         }
         LExpr::App(func, args) => {                
             // make a return continuation function
-            let ret = {
+            let def = {
                 let func = genvar('r');
                 let args = vec![genvar('x')];
                 let body = Box::new(CExpr::Tag(
@@ -60,7 +61,7 @@ pub fn cps_trans(expr: &LExpr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
             for _ in args {
                 argsvar.push(genvar('x'));
             }
-            argsvar.push(ret.func);
+            argsvar.push(def.func);
 
             // make "f(x1,x2,...,xn,r)"
             let mut result = CExpr::App(
@@ -78,7 +79,7 @@ pub fn cps_trans(expr: &LExpr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
                 result = cps_trans(arg, argsvar[i], Box::new(result));
             }
 
-            result
+            CExpr::Let(def,Box::new(result))
         }
         LExpr::Uniop(prim, arg) => {
             // generate new variable "r" and fill the hole
@@ -147,8 +148,10 @@ fn cps_trans_test() {
             vec![Val(Int(41)),Val(Int(42))]
         );
     
-    println!("{:#?}",cps_trans_top(&expr));
-
+    let expr = cps_trans_top(&expr);
+    println!("{:#?}", expr);
+    let expr = subst_expr(expr);
+    println!("\n\n{:#?}", expr);
 
 
 }

@@ -1,10 +1,14 @@
 use std::collections::HashMap;
-use std::fmt::{self, write};
+use std::fmt::{self, write, Display};
+
+use std::ops::Deref;
 
 use crate::core::*;
 use crate::symbol::{Symbol, newvar};
+use crate::visitor::Visitor;
 
 use itertools::Itertools;
+
 
 /*
 pub trait Pretty<S> {
@@ -49,7 +53,7 @@ impl<T:fmt::Debug> fmt::Debug for MyVec<T> {
 
 
 
-impl fmt::Debug for Atom {
+impl fmt::Display for Atom {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Atom::Var(x) => write!(f,"{:?}",x),
@@ -67,12 +71,13 @@ impl fmt::Debug for Atom {
 impl<T:fmt::Debug> fmt::Debug for Def<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Def {func,args,body} = self;
-        write!(f,"{func:?}({:?}) = {body:?}",args.iter().format(","))
+        write!(f,"{func:?}({:?}) = ",args.iter().format(","))?;
+        f.debug_struct("")
+            .field("",body)
+            .finish()
     }
 }
-
-
-
+/*
 impl fmt::Debug for CExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -80,14 +85,11 @@ impl fmt::Debug for CExpr {
                 write!(f,"{func:?}({:?})",args.iter().format(","))
             }
             CExpr::Let(def, cont) => {
-                //writeln!(f,"let {def:?} in")?;
-                f.debug_struct("let")
-                    .field("val", def)
-                    .finish()?;
-                write!(f,"\nin {cont:?}")       
+                writeln!(f,"let {def:?} in\n {cont:?}") 
             }
-            CExpr::Fix(_, _) => {
-                todo!()
+            CExpr::Fix(defs, cont) => {
+                writeln!(f,"letrec {:?} in\n {cont:?}",
+                    defs.iter().format("\n")) 
             }
             CExpr::Binop(prim, arg1, arg2, res, cont) => {
                 writeln!(f,"{res:?} <- {prim:?} {arg1:?} {arg2:?}")?;
@@ -104,10 +106,9 @@ impl fmt::Debug for CExpr {
                     .field("else", flbr)
                     .finish()
             }
-            
             CExpr::Switch(_, _) => todo!(),
             CExpr::Record(_, _, _) => todo!(),
-            CExpr::Select(_, _) => todo!(),
+            CExpr::Select(_,_,_, _) => todo!(),
             CExpr::Halt(x) => {
                 write!(f,"Halt({x:?})")
             }
@@ -128,6 +129,170 @@ impl fmt::Debug for Tag {
         }
     }
 }
+*/
+
+//#[derive(Clone, Debug, PartialEq, PartialOrd)]
+pub struct Printer<'a> {
+    f: fmt::Formatter<'a>,
+    indent: usize,
+}
+
+impl<'a> Printer<'a> {
+    pub fn new(f: fmt::Formatter) -> Printer {
+        Printer {
+            f,
+            indent: 0,
+        }
+    }
+
+    pub fn print<T>(&mut self, obj: &T) -> fmt::Result
+    where T: Display {
+        write!(self.f, "{}", obj)
+    }
+    pub fn print_ref<T,U> (&mut self, obj: &T) -> fmt::Result
+    where T: Deref<Target = U>, U: fmt::Display{
+        write!(self.f, "{}", obj.deref())
+    }
+
+    pub fn print_many<T,D>(&mut self, vec: &Vec<T>, delim: &D) -> fmt::Result
+    where T: Display,D: Display{
+        if !vec.is_empty() {
+            self.print(&vec[0])?;
+            for elem in &vec[1..] {
+                self.print(delim)?;
+                self.print(elem)?;
+            }
+        }
+        Ok(())
+    }
+    pub fn print_many_ref<T,U,D>(&mut self, vec: &Vec<T>, delim: &D) -> fmt::Result
+    where T: Deref<Target = U>, U: fmt::Display, D: Display{
+        if !vec.is_empty() {
+            self.print_ref(&vec[0])?;
+            for elem in &vec[1..] {
+                self.print(delim)?;
+                self.print_ref(elem)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn newline(&mut self) -> fmt::Result {
+        write!(self.f, "\n")?;
+        for _ in 0..self.indent {
+            write!(self.f, "{}", ' ')?;
+        }
+        Ok(())
+    }
+
+    pub fn nested<F>(&mut self, indent: usize, body: F) -> fmt::Result
+    where F: for<'b> Fn(&'b mut Printer<'a>) -> fmt::Result {
+        self.indent += indent;
+        body(self)?;
+        self.indent -= indent;
+        Ok(())
+    }
+
+    pub fn surrounded<L,R,F>(&mut self, left: &L, right: &R, body: F) -> fmt::Result
+    where L: Display, R: Display,
+        F: (for<'b> Fn(&'b mut Printer) -> fmt::Result) {
+        self.print(left)?;
+        body(self)?;
+        self.print(right)?;
+        Ok(())
+    }
+
+    /*
+    pub fn surrounded<F>(&mut self, left: F, body: F, right: F) -> fmt::Result
+    where F: for<'b> Fn(&'b mut Printer) -> fmt::Result {
+        left(self);
+        body(self);
+        right(self);
+        Ok(())
+    }
+
+    pub fn seperated<F>(&mut self, vec: Vec<F>, delim: F) -> fmt::Result
+    where F: for<'b> Fn(&'b mut Printer<'a>) -> fmt::Result {
+        if !vec.is_empty() {
+            self.print_ref(&vec[0])?;
+            for elem in &vec[1..] {
+                self.print(delim)?;
+                self.print_ref(elem)?;
+            }
+        }
+        Ok(())
+    }
+
+    */
+}
+
+
+pub trait Print {
+    fn print<'a>(&self, pr: &mut Printer<'a>) -> fmt::Result;
+}
+
+impl<T: fmt::Display> Print for T {
+    fn print<'a>(&self, pr: &mut Printer<'a>) -> fmt::Result {
+        pr.print(self)
+    }
+}
+/*
+impl<T: Print> fmt::Display for T {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let pr = Printer {
+            f,
+            indent: 0,
+        };
+        pr.print(self)
+    }
+}
+*/
+
+impl Print for CExpr {
+    fn print<'a>(&self, pr: &mut Printer<'a>) -> fmt::Result {
+        match self {
+            CExpr::App(func, args) => {
+                pr.print(func)?;
+                pr.surrounded(&'(', &')',|pr| {
+                    pr.print_many(args, &',')
+                })
+            }
+            CExpr::Let(def, cont) => {
+                writeln!(f,"let {def:?} in\n {cont:?}") 
+            }
+            CExpr::Fix(defs, cont) => {
+                writeln!(f,"letrec {:?} in\n {cont:?}",
+                    defs.iter().format("\n")) 
+            }
+            CExpr::Binop(prim, arg1, arg2, res, cont) => {
+                writeln!(f,"{res:?} <- {prim:?} {arg1:?} {arg2:?}")?;
+                write!(f,"{:?}",cont)
+            }
+            CExpr::Uniop(prim, arg, res, cont) => {
+                writeln!(f,"{res:?} <- {prim:?} {arg:?}")?;
+                write!(f,"{:?}",cont)
+            }
+            CExpr::Ifte(cond, trbr, flbr) => {
+                f.debug_struct("Ifte")
+                    .field("cond", cond)
+                    .field("then", trbr)
+                    .field("else", flbr)
+                    .finish()
+            }
+            CExpr::Switch(_, _) => todo!(),
+            CExpr::Record(_, _, _) => todo!(),
+            CExpr::Select(_,_,_, _) => todo!(),
+            CExpr::Halt(x) => {
+                write!(f,"Halt({x:?})")
+            }
+            CExpr::Tag(tag, expr) => {
+                write!(f,"{{ {tag:?} | {expr:?} }}")
+            }
+        }
+    }
+}
+
+
 #[test]
 fn pretty_test() {
     use CExpr::*;
@@ -157,6 +322,6 @@ fn pretty_test() {
         Box::new(App(Var(g),vec![Var(x),Var(y)]))
     );
 
-    println!("{:#?}", outer);
+    println!("{}", outer);
     
 }
