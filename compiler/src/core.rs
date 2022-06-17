@@ -1,6 +1,5 @@
 use crate::symbol::Symbol;
 
-
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Atom {
     Var(Symbol),

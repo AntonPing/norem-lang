@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use std::fmt;
+use std::collections::HashMap;
 use std::sync::Mutex;
 
-lazy_static! {
+lazy_static::lazy_static! {
     static ref GLOB_TABLE: Mutex<SymbTable> = {
         Mutex::new(SymbTable::new())
     };
@@ -10,10 +10,18 @@ lazy_static! {
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Symbol {
+    BuiltIn(usize),
     Var(usize),
     VarN(usize,usize),
     Gen(char,usize),
+    Str(usize),
     //Forall(usize),
+}
+
+impl Default for Symbol {
+    fn default() -> Self {
+        Symbol::BuiltIn(0)
+    }
 }
 
 
@@ -25,11 +33,13 @@ pub struct SymbTable {
     sym_vec: Vec<String>,
     // number of generated symbol
     gensym_idx : usize,
+    // for all constant string
+    str_vec: Vec<String>,
 }
 
 impl SymbTable {
     pub fn new() -> SymbTable {
-        let mut table = SymbTable::with_capacity(256);
+        let table = SymbTable::with_capacity(256);
         /*
         for sym in BUILTIN {
             table.newsym(sym);
@@ -43,16 +53,17 @@ impl SymbTable {
             sym_map: HashMap::with_capacity(n),
             sym_vec: Vec::with_capacity(n),
             gensym_idx: 0,
+            str_vec: Vec::with_capacity(n),
         }
     }
 
     pub fn newsym(&mut self, s: &str) -> Symbol {
-        if let Some(sym) = self.sym_map.get(s) {
-            return Symbol::Var(*sym);
+        if let Some(n) = self.sym_map.get(s) {
+            return Symbol::Var(*n);
         } else {
             let len = self.sym_vec.len();
-            self.sym_map.insert(s.to_string(), len);
             self.sym_vec.push(s.to_string());
+            self.sym_map.insert(s.to_string(), len);
             Symbol::Var(len)
         }
     }
@@ -60,16 +71,29 @@ impl SymbTable {
     pub fn gensym(&mut self, ch: char) -> Symbol {
         let old = self.gensym_idx;
         self.gensym_idx += 1;
-        Symbol::Gen(ch,self.gensym_idx)
+        Symbol::Gen(ch,old)
     }
 
-    pub fn get(&self, s: &str) -> Option<Symbol> {
+    pub fn newstr(&mut self, s: String) -> Symbol {
+        let len = self.str_vec.len();
+        self.str_vec.push(s);
+        Symbol::Str(len)
+    }
+    /*
+    pub fn get_sym(&self, s: &str) -> Option<Symbol> {
         let idx = self.sym_map.get(s)?;
         Some(Symbol::Var(*idx))
     }
+    */
+
+    pub fn get_idx(&self, idx: usize) -> Option<String> {
+        let str = self.sym_vec.get(idx)?;
+        Some(str.clone())
+    }
 
     pub fn get_str(&self, idx: usize) -> Option<String> {
-        self.sym_vec.get(idx).map(|s| s.clone())
+        let str = self.str_vec.get(idx)?;
+        Some(str.clone())
     }
 }
 
@@ -77,21 +101,21 @@ impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
         let table = GLOB_TABLE.lock().unwrap();
         match self {
+            &Symbol::BuiltIn(n) => {
+                write!(f, "{}", BUILTIN[n])
+            }
             &Symbol::Var(x) => {
-                write!(f, "{}", table.get_str(x).unwrap())
+                write!(f, "{}", table.get_idx(x).unwrap())
             }
             &Symbol::VarN(x,n) => {
-                write!(f, "{}_{n}", table.get_str(x).unwrap())
+                write!(f, "{}_{n}", table.get_idx(x).unwrap())
             }
             &Symbol::Gen(ch,n) => {
                 write!(f, "#{}_{}",ch, n)
             }
-            /*
-            &Symbol::Forall(n) => write!(f,"{}",
-                "abcdefghijklmnopqrstuvwxyz".to_string().chars().nth(n).unwrap()
-            ),
-            &Symbol::Wild => write!(f, "_")
-            */
+            &Symbol::Str(n) => {
+                write!(f, "{}", table.get_str(n).unwrap())
+            }
         }
     }
 }
@@ -106,7 +130,10 @@ pub fn genvar(ch: char) -> Symbol {
     table.gensym(ch)
 }
 
-/*
+pub fn builtin(id: usize) -> Symbol {
+    Symbol::BuiltIn(id)
+}
+
 const BUILTIN: [&'static str; 11] = [
     "and",
     "or",
@@ -122,7 +149,7 @@ const BUILTIN: [&'static str; 11] = [
 ];
 
 pub const MIN_BUILDIN : usize = 0;
-pub const MAX_BUILDIN : usize = 10;
+pub const MAX_BUILDIN : usize = 256;
 
 pub const AND_ID : usize = 0;
 pub const OR_ID : usize = 1;
@@ -144,4 +171,4 @@ impl Symbol {
         } else { false }
     }
 }
-*/
+
