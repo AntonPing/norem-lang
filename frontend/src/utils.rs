@@ -1,8 +1,8 @@
 use crate::{ast::*, symbol::Symbol};
 
-use std::fmt::{Debug, Display, Formatter, self};
-use std::ops::Deref;
 use std::cell::RefCell;
+use std::fmt::{self, Debug, Display, Formatter};
+use std::ops::Deref;
 use std::rc::{Rc, Weak};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -14,13 +14,10 @@ pub struct Span {
 
 impl Span {
     pub fn new(start: usize, end: usize) -> Span {
-        Span { start , end }
+        Span { start, end }
     }
     pub const fn zero() -> Span {
-        Span {
-            start: 0,
-            end: 0,
-        }
+        Span { start: 0, end: 0 }
     }
 }
 
@@ -32,9 +29,12 @@ pub struct Spanned<T> {
 
 impl<T> Spanned<T> {
     pub fn new(data: T, span: Span) -> Self {
-        Spanned { data: Box::new(data), span }
+        Spanned {
+            data: Box::new(data),
+            span,
+        }
     }
-    
+
     pub fn data(self) -> T {
         *self.data
     }
@@ -49,7 +49,7 @@ impl<T> Spanned<T> {
             span: self.span,
         }
     }
-    
+
     pub fn zero(data: T) -> Self {
         Spanned {
             data: Box::new(data),
@@ -98,7 +98,10 @@ impl<T> Spanned<Option<T>> {
 //impl<T: Copy> Copy for Spanned<T> {}
 impl<T: Clone> Clone for Spanned<T> {
     fn clone(&self) -> Self {
-        Spanned { data: self.data.clone(), span: self.span }
+        Spanned {
+            data: self.data.clone(),
+            span: self.span,
+        }
     }
 }
 
@@ -124,7 +127,6 @@ pub type Ptr<T> = Rc<T>;
 pub fn Ptr<T>(val: T) -> Ptr<T> {
     Ptr::new(val)
 }
-
 
 pub struct Mut<T>(Rc<RefCell<T>>);
 pub struct MutWeak<T>(Weak<RefCell<T>>);
@@ -192,6 +194,6 @@ where
     }
 }
 
-pub fn unfold_lam(expr: &Expr) -> (Vec<&Symbol>,&Expr) {
+pub fn unfold_lam(expr: &Expr) -> (Vec<&Symbol>, &Expr) {
     unimplemented!()
 }

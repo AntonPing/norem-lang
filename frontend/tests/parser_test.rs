@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::RefCell};
+use std::{cell::RefCell, rc::Rc};
 
 use norem_frontend::parser::*;
 use norem_frontend::symbol::*;
@@ -7,11 +7,11 @@ use norem_frontend::symbol::*;
 pub fn parser_func() {
     let string = "fn f g x => f x (g x)";
     let table = Rc::new(RefCell::new(SymTable::new()));
-    let mut par = Parser::new(string,table);
+    let mut par = Parser::new(string, table);
 
     let expr = par.read_app();
     assert!(expr.is_some());
-    println!("{:?}",expr);
+    println!("{:?}", expr);
 }
 
 #[test]
@@ -24,10 +24,10 @@ pub fn parse_case() {
     ";
 
     let table = Rc::new(RefCell::new(SymTable::new()));
-    let mut par = Parser::new(string,table);
+    let mut par = Parser::new(string, table);
     let expr = par.read_app();
     assert!(expr.is_some());
-    println!("{:?}",expr);
+    println!("{:?}", expr);
 }
 #[test]
 pub fn parse_let_data() {
@@ -37,10 +37,10 @@ pub fn parse_let_data() {
     ";
 
     let table = Rc::new(RefCell::new(SymTable::new()));
-    let mut par = Parser::new(string,table);
+    let mut par = Parser::new(string, table);
     let expr = par.read_app();
     assert!(expr.is_some());
-    println!("{:?}",expr);
+    println!("{:?}", expr);
 }
 
 #[test]
@@ -59,8 +59,8 @@ pub fn parser_let_many() {
     ";
 
     let table = Rc::new(RefCell::new(SymTable::new()));
-    let mut par = Parser::new(string,table);
+    let mut par = Parser::new(string, table);
     let expr = par.read_app();
     assert!(expr.is_some());
-    println!("{:?}",expr);
+    println!("{:?}", expr);
 }

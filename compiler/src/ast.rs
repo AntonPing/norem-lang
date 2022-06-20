@@ -20,9 +20,19 @@ pub enum LitVal {
     Char(char),
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Prim {
+    IAdd,
+    ISub,
+    IMul,
+    IDiv,
+    INeg,
+    BNot,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExprPrim {
-    pub prim: Symbol,
+    pub prim: Prim,
     pub span: Span,
 }
 
@@ -81,7 +91,6 @@ pub struct DeclVal {
     pub span: Span,
 }
 
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeclData {
     pub name: Symbol,
@@ -118,7 +127,7 @@ pub enum Pattern {
     /// Algebraic datatype constructor, along with binding pattern
     App(Symbol, Vec<Pattern>),
     /// Constant
-    Lit(ExprLit),
+    Lit(LitVal),
     /// List pattern [pat1, ... patN]
     // List(Vec<Pat>),
     /// Record pattern { label1, label2 }, and whether it's flexible or not
@@ -136,7 +145,7 @@ pub enum LitType {
     Char,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Cons(Symbol),
     Lit(LitType),
@@ -147,25 +156,51 @@ pub enum Type {
     Temp(usize),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Scheme {
-    Mono(Type), 
-    Poly(Vec<Symbol>,Type),
+    Mono(Type),
+    Poly(Vec<Symbol>, Type),
 }
 
+impl Expr {
+    pub fn is_prim(&self) -> bool {
+        if let Expr::Prim(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl Prim {
+    pub fn get_arity(&self) -> usize {
+        match self {
+            Prim::IAdd => 2,
+            Prim::ISub => 2,
+            Prim::IMul => 2,
+            Prim::IDiv => 2,
+            Prim::INeg => 1,
+            Prim::BNot => 1,
+        }
+    }
+    
+}
+
+
+
 /*
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeVar {
     pub name: Symbol,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeArr {
     pub ty1: Box<Type>,
     pub ty2: Box<Type>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeApp {
     pub ty1: Box<Type>,
     pub ty2: Box<Type>,
@@ -232,4 +267,3 @@ pub enum Fixity {
 
 
 */
-

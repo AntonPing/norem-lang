@@ -1,12 +1,14 @@
 use crate::ast::*;
 use crate::symbol::Symbol;
 use crate::utils::*;
+use crate::visitor::ExprVisitor;
 
 pub struct Checker {
     val_env: MultiSet<Symbol>,
     data_env: MultiSet<Symbol>,
     cons_env: MultiSet<Symbol>,
     type_env: MultiSet<Symbol>,
+    error: Vec<CheckError>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -15,25 +17,12 @@ pub enum CheckError {
     DataNotBound(Symbol),
     ConsNotBound(Symbol),
     TypeNotBound(Symbol),
-    FuncArgsNotUnique(Symbol),
-    ErrorIn(&'static str, Span),
+    FuncArgsNotUnique(Span, Symbol),
+    ErrorIn(Span, &'static str),
 }
 
-type CheckResult<T> = Result<T,Vec<CheckError>>;
+type CheckResult<T> = Result<T, ()>;
 type CheckFunc<T> = fn(&mut Checker) -> CheckResult<T>;
-
-pub fn check_unique(xs: &Vec<Symbol>) -> Option<Symbol> {
-    let mut ys: Vec<Symbol> = Vec::new();
-    for x in xs {
-        for y in &ys {
-            if x == y {
-                return Some(*x);
-            }
-        }
-        ys.push(*x);
-    }
-    None
-}
 
 impl Checker {
     pub fn new() -> Checker {
@@ -42,24 +31,32 @@ impl Checker {
             data_env: MultiSet::new(),
             cons_env: MultiSet::new(),
             type_env: MultiSet::new(),
+            error: Vec::new(),
         }
     }
 
-    pub fn local_val<F,T>(&mut self, sym: Symbol, func: F) -> CheckResult<T>
-    where F: Fn(&mut Checker) -> CheckResult<T> {
+    pub fn log_err(&mut self, err: CheckError) {
+        self.error.push(err);
+    }
+    /*
+    pub fn local_val<F, T>(&mut self, sym: Symbol, func: F) -> CheckResult<T>
+    where
+        F: Fn(&mut Checker) -> CheckResult<T>,
+    {
         self.val_env.insert(sym);
         let res = func(self);
         self.val_env.remove(&sym);
         res
     }
-    pub fn local_data<F,T>(&mut self, sym: Symbol, func: F) -> CheckResult<T>
-    where F: Fn(&mut Checker) -> CheckResult<T> {
+    pub fn local_data<F, T>(&mut self, sym: Symbol, func: F) -> CheckResult<T>
+    where
+        F: Fn(&mut Checker) -> CheckResult<T>,
+    {
         self.data_env.insert(sym);
         let res = func(self);
         self.data_env.remove(&sym);
         res
     }
-
     pub fn scope_val(&self, sym: &Symbol) -> CheckResult<()> {
         if self.val_env.contains(sym) {
             Ok(())
@@ -88,9 +85,7 @@ impl Checker {
             Err(vec![CheckError::DataNotBound(*sym)])
         }
     }
-
-    
-
+    */
 
     /*
 
@@ -111,7 +106,7 @@ impl Checker {
     pub fn check_val_decl(&mut self, decl: &ValDecl) -> Result<(),String> {
         let ValDecl { name, args, body } = decl;
         self.var_extend(*name);
-        check_unique(args)?;       
+        check_unique(args)?;
         self.var_extend_many(args);
         self.check_expr(body)?;
         self.var_delete_many(args);
@@ -127,11 +122,11 @@ impl Checker {
             .iter()
             .map(|x| x.cons)
             .collect();
-        
+
         check_unique(&constructors)?;
         for var in vars {
             self.check_varient(var.deref())?;
-        } 
+        }
 
         self.var_delete_many(args);
         Ok(())
@@ -140,7 +135,7 @@ impl Checker {
     pub fn check_varient(&mut self, var: &Variant) -> Result<(),String> {
         let Variant { cons, args } = var;
         for arg in args {
-            self.check_type(&arg)?;    
+            self.check_type(&arg)?;
         }
         self.cons_env.insert(*cons);
         Ok(())
@@ -272,52 +267,6 @@ impl Checker {
             }
         }
     }
-    */
-
-
-    pub fn check_expr_var(&mut self, var: &ExprVar) -> CheckResult<()> {
-        let ExprVar { ident, span } = var;
-        (|| {
-            self.scope_val(ident)
-        })().map_err(|mut e: Vec<CheckError>| {
-            e.push(CheckError::ErrorIn("Variable", span.clone()));
-            e
-        })
-    }
-
-    pub fn check_expr_lam(&mut self, lam: &ExprLam) -> CheckResult<()> {
-        let ExprLam { args, body, span } = lam;
-        (|| {
-            if let Some(sym) = check_unique(args) {
-                return Err(vec![CheckError::FuncArgsNotUnique(sym)]);
-            }
-            for arg in args {
-                self.val_env.insert(*arg);
-            }
-            self.check_expr(body)?;
-            for arg in args {
-                self.val_env.remove(arg);
-            }
-            Ok(())
-        })().map_err(|mut e: Vec<CheckError>| {
-            e.push(CheckError::ErrorIn("Lambda Abstraction", span.clone()));
-            e
-        })
-    }
-
-    pub fn check_expr_app(&mut self, app: &ExprApp) -> CheckResult<()> {
-        let ExprApp { func, args, span } = app;
-        (|| {
-            self.check_expr(func)?;
-            for arg in args {
-                self.check_expr(arg)?;
-            }
-            Ok(())
-        })().map_err(|mut e: Vec<CheckError>| {
-            e.push(CheckError::ErrorIn("Lambda Application", span.clone()));
-            e
-        })
-    }
 
     pub fn check_expr(&mut self, expr: &Expr) -> CheckResult<()> {
         match expr {
@@ -339,5 +288,54 @@ impl Checker {
             }
             _ => unimplemented!()
         }
+    }
+    */
+}
+pub fn check_unique(xs: &Vec<Symbol>) -> Option<Symbol> {
+    let mut ys: Vec<Symbol> = Vec::new();
+    for x in xs {
+        for y in &ys {
+            if x == y {
+                return Some(*x);
+            }
+        }
+        ys.push(*x);
+    }
+    None
+}
+
+impl ExprVisitor for Checker {
+    fn visit_var(&mut self, expr: ExprVar) -> ExprVar {
+        let ExprVar { ident, span } = expr;
+        if !self.val_env.contains(&ident) {
+            self.error_throw(CheckError::ValNotBound(ident));
+        }
+        self.error_catch(CheckError::ErrorIn("ExprVar", span));
+        ExprVar { ident, span }
+    }
+
+    fn visit_lam(&mut self, expr: ExprLam) -> ExprLam {
+        let ExprLam { args, body, span } = expr;
+        if let Some(sym) = check_unique(&args) {
+            self.error_throw(CheckError::FuncArgsNotUnique(sym));
+        }
+        for arg in &args {
+            self.val_env.insert(*arg);
+        }
+        let body = Box::new(self.walk_expr(*body));
+        for arg in &args {
+            self.val_env.remove(arg);
+        }
+        self.error_catch(CheckError::ErrorIn("ExprLam", span));
+        ExprLam { args, body, span }
+    }
+
+    fn visit_app(&mut self, expr: ExprApp) -> ExprApp {
+        let ExprApp { func, args, span } = expr;
+        let func = Box::new(self.walk_expr(*func));
+        let args = args.into_iter().map(|arg| self.walk_expr(arg)).collect();
+
+        self.error_catch(CheckError::ErrorIn("ExprApp", span));
+        ExprApp { func, args, span }
     }
 }

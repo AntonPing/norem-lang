@@ -5,20 +5,20 @@ use std::rc::Rc;
 
 use hashbag::HashBag;
 
-use crate::utils::*;
-use crate::symbol::*;
+use crate::ast::*;
 use crate::parser::*;
 use crate::pretty::*;
-use crate::ast::*;
+use crate::symbol::*;
+use crate::utils::*;
 
-type Subst = HashMap<Symbol,Type>;
+type Subst = HashMap<Symbol, Type>;
 type VarSet = HashBag<Symbol>;
 
 impl Type {
     fn new(ty: Type) -> Type {
         unimplemented!()
     }
-    
+
     fn ftv(&self) -> VarSet {
         let mut result = HashBag::new();
         let mut stack = Vec::<&Type>::new();
@@ -30,7 +30,7 @@ impl Type {
                 Type::Var(x) => {
                     result.insert(*x);
                 }
-                Type::Arr(ty1,ty2) => {
+                Type::Arr(ty1, ty2) => {
                     stack.push(ty1);
                     stack.push(ty2);
                 }
@@ -46,9 +46,7 @@ impl Type {
 
     fn subst(&self, sub: &Subst) -> Type {
         match self {
-            Type::Lit(_) => {
-                self.clone()
-            }
+            Type::Lit(_) => self.clone(),
             Type::Var(x) => {
                 if let Some(t) = sub.get(&x) {
                     t.clone().subst(sub)
@@ -56,16 +54,9 @@ impl Type {
                     self.clone()
                 }
             }
-            Type::Arr(t1,t2) => {
-                Type::Arr(
-                    Ptr(t1.subst(sub)),
-                    Ptr(t2.subst(sub)))
-            }
+            Type::Arr(t1, t2) => Type::Arr(Ptr(t1.subst(sub)), Ptr(t2.subst(sub))),
             Type::App(cons, args) => {
-                let new_args = args
-                    .iter()
-                    .map(|arg| Ptr(arg.subst(sub)))
-                    .collect();
+                let new_args = args.iter().map(|arg| Ptr(arg.subst(sub))).collect();
                 Type::App(*cons, new_args)
             }
         }
@@ -78,13 +69,13 @@ impl Type {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Scheme {
     Mono(Type),
-    Poly(usize,Type),
+    Poly(usize, Type),
 }
 
 impl Scheme {
     fn ftv(&self) -> VarSet {
         match self {
-            Scheme::Mono(ty) => { ty.ftv() }
+            Scheme::Mono(ty) => ty.ftv(),
             Scheme::Poly(len, ty) => {
                 let mut set = ty.ftv();
                 for x in 0..*len {
@@ -96,22 +87,21 @@ impl Scheme {
     }
 }
 
-
 #[derive(Clone, Debug, PartialEq)]
 enum EnvHistory {
     // in env is such key, old data covered
-    Update(Symbol,Scheme),
+    Update(Symbol, Scheme),
     // in env no such key, symbol was inserted
     Insert(Symbol),
     // symbol was deleted from env
-    Delete(Symbol,Scheme),
+    Delete(Symbol, Scheme),
     // symbol not in env, nothing happened
     Nothing,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct Environment {
-    current: HashMap<Symbol,Scheme>,
+    current: HashMap<Symbol, Scheme>,
     freevars: HashBag<Symbol>,
     history: Vec<EnvHistory>,
 }
@@ -141,14 +131,14 @@ impl Environment {
     }
 
     fn add_scheme(&mut self, sc: &Scheme) {
-        for (x,n) in sc.ftv() {
+        for (x, n) in sc.ftv() {
             self.freevars.insert_many(x, n);
         }
     }
 
     fn remove_scheme(&mut self, sc: &Scheme) {
-        for (x,n) in sc.ftv() {
-            if let Some((_,m)) = self.freevars.get(&x) {
+        for (x, n) in sc.ftv() {
+            if let Some((_, m)) = self.freevars.get(&x) {
                 self.freevars.take_all(&x);
                 assert!(m >= n);
                 if m > n {
@@ -163,9 +153,9 @@ impl Environment {
     fn update(&mut self, k: Symbol, v: Scheme) -> usize {
         let back = self.backup();
         self.add_scheme(&v);
-        if let Some(old) = self.current.insert(k,v) {
+        if let Some(old) = self.current.insert(k, v) {
             self.remove_scheme(&old);
-            self.history.push(EnvHistory::Update(k,old));
+            self.history.push(EnvHistory::Update(k, old));
         } else {
             self.history.push(EnvHistory::Insert(k));
         }
@@ -176,12 +166,11 @@ impl Environment {
         let back = self.backup();
         if let Some(old) = self.current.remove(&k) {
             self.remove_scheme(&old);
-            self.history.push(EnvHistory::Delete(k,old));
+            self.history.push(EnvHistory::Delete(k, old));
         } else {
             self.history.push(EnvHistory::Nothing);
         }
         back
-
     }
     fn backup(&self) -> usize {
         self.history.len()
@@ -191,10 +180,10 @@ impl Environment {
         //println!("recover {} from {}",mark,self.history.len());
         for _ in mark..self.history.len() {
             if let Some(row) = self.history.pop() {
-                match row {    
-                    EnvHistory::Update(x,sc) => {
+                match row {
+                    EnvHistory::Update(x, sc) => {
                         self.add_scheme(&sc);
-                        let r = self.current.insert(x,sc);
+                        let r = self.current.insert(x, sc);
                         self.remove_scheme(&r.unwrap());
                         //assert!(r.is_some());
                     }
@@ -203,7 +192,7 @@ impl Environment {
                         self.remove_scheme(&r.unwrap());
                         //assert!(r.is_some());
                     }
-                    EnvHistory::Delete(x,sc) => {
+                    EnvHistory::Delete(x, sc) => {
                         self.add_scheme(&sc);
                         let r = self.current.insert(x, sc);
                         assert!(r.is_none());
@@ -232,7 +221,7 @@ impl Infer {
             env: Environment::new(),
             subst: HashMap::new(),
             table,
-            err_msg: Vec::new()
+            err_msg: Vec::new(),
         }
     }
 
@@ -244,19 +233,18 @@ impl Infer {
         let map = HashMap::new();
         map.insert(key, value);
 
-        for (k,v) in self.subst {
+        for (k, v) in self.subst {
             let new_v = v.subst(&map);
             self.subst.insert(k, new_v);
         }
 
         self.subst.insert(key, value);
-
     }
 
     fn generalize(&mut self, ty: &Type) -> Scheme {
         let mut sub = HashMap::new();
         let mut len = 0;
-        for (x,_) in ty.ftv() {
+        for (x, _) in ty.ftv() {
             if !self.env.contains(x) {
                 sub.insert(x, Type::Var(Symbol::Forall(len)));
                 len += 1;
@@ -273,7 +261,7 @@ impl Infer {
 
     fn instantiate(&mut self, sc: &Scheme) -> Type {
         match sc {
-            Scheme::Mono(ty) => { ty.clone() }
+            Scheme::Mono(ty) => ty.clone(),
             Scheme::Poly(n, ty) => {
                 let mut sub = HashMap::new();
                 for x in 0..*n {
@@ -286,7 +274,7 @@ impl Infer {
     }
 
     fn unify(&mut self, ty1: &Type, ty2: &Type) -> Result<(), String> {
-        match (ty1,ty2) {
+        match (ty1, ty2) {
             (Type::Var(x), _) => {
                 if ty2.occur_check(&x) {
                     Err("Occur check failed!".to_string())
@@ -307,20 +295,16 @@ impl Infer {
             }
             (Type::Lit(a), Type::Lit(b)) => {
                 if a != b {
-                    return Err(format!("Can't unify {:?} and {:?}!",a,b));
+                    return Err(format!("Can't unify {:?} and {:?}!", a, b));
                 }
                 Ok(())
             }
-            (Type::Arr(a1,a2),
-                Type::Arr(b1,b2)) => {
-
+            (Type::Arr(a1, a2), Type::Arr(b1, b2)) => {
                 self.unify(a1.deref(), b1.deref())?;
                 self.unify(a2.deref(), b2.deref())?;
                 Ok(())
             }
-            (Type::App(cons1,args1),
-                Type::App(cons2,args2)) => {
-                
+            (Type::App(cons1, args1), Type::App(cons2, args2)) => {
                 if cons1 != cons2 {
                     return Err(format!("diffent constructor {:?} {:?}!", cons1, cons2));
                 }
@@ -330,20 +314,16 @@ impl Infer {
                 }
                 Ok(())
             }
-            (a,b) => {
-                Err(format!("Can't unify {:?} and {:?}!",a,b))
-            }
+            (a, b) => Err(format!("Can't unify {:?} and {:?}!", a, b)),
         }
     }
-    fn infer(&mut self, expr: &Expr) -> Result<Type,String> {
+    fn infer(&mut self, expr: &Expr) -> Result<Type, String> {
         match expr {
-            Expr::Lit(lit) => {
-                Ok(Type::Lit(lit_value_type(lit.clone())))
-            }
+            Expr::Lit(lit) => Ok(Type::Lit(lit_value_type(lit.clone()))),
             Expr::Var(sym) => {
                 match sym {
                     Symbol::Var(_) => {
-                        let res = self.env.lookup(*sym).map(|x|x.clone());
+                        let res = self.env.lookup(*sym).map(|x| x.clone());
                         if let Some(sc) = res {
                             let ty = self.instantiate(&sc);
                             Ok(ty)
@@ -359,13 +339,12 @@ impl Infer {
                         unimplemented!()
                     }
                 }
-                
             }
             Expr::Lam(args, body) => {
                 let old = self.env.backup();
-                
+
                 let vec = Vec::new();
-                
+
                 for arg in args {
                     let new = Type::Var(self.newvar());
                     vec.push(new);
@@ -377,15 +356,13 @@ impl Infer {
                 self.env.recover(old);
 
                 Ok(vec
-                    .iter().rev()
-                    .fold(body_typ, |iter, x| {
-                        Type::Arr(Ptr(*x), Ptr(iter))
-                    }))
-                
+                    .iter()
+                    .rev()
+                    .fold(body_typ, |iter, x| Type::Arr(Ptr(*x), Ptr(iter))))
             }
             Expr::App(func, args) => {
                 let tyf = self.infer(func)?;
-                
+
                 let mut tyargs = Vec::new();
                 for arg in args {
                     let ty = self.infer(arg)?;
@@ -394,22 +371,22 @@ impl Infer {
 
                 let tyres = Type::Var(self.newvar());
 
-                let tyfunc = tyargs.iter().rev()
-                    .fold(tyres, |iter, tyarg| {
-                        Type::Arr(Ptr(*tyarg),Ptr(iter))
-                    });
+                let tyfunc = tyargs
+                    .iter()
+                    .rev()
+                    .fold(tyres, |iter, tyarg| Type::Arr(Ptr(*tyarg), Ptr(iter)));
                 self.unify(&tyf, &tyfunc)?;
-                
+
                 Ok(tyres)
-            },
+            }
             Expr::Let(decls, body) => {
                 let old = self.env.backup();
-                
+
                 for decl in decls {
                     self.infer_delc(decl)?;
                 }
                 let ty = self.infer(body)?;
-                
+
                 self.env.recover(old);
 
                 Ok(ty)
@@ -421,12 +398,9 @@ impl Infer {
         }
     }
 
-    fn infer_delc(&mut self, decl: &Decl) -> Result<(),String> {
+    fn infer_delc(&mut self, decl: &Decl) -> Result<(), String> {
         match decl {
-            Decl::Val(ValDecl{
-                name,args,body
-            }) => {
-
+            Decl::Val(ValDecl { name, args, body }) => {
                 let old = self.env.backup();
 
                 for arg in args {
@@ -441,7 +415,6 @@ impl Infer {
                 self.env.update(*name, res);
 
                 Ok(())
-
             }
             _ => {
                 unimplemented!()
@@ -449,13 +422,12 @@ impl Infer {
         }
     }
 
-
-    pub fn infer_top(&mut self, exp: &Expr) -> Result<Scheme,String> {
+    pub fn infer_top(&mut self, exp: &Expr) -> Result<Scheme, String> {
         let old = self.env.backup();
-        
+
         let ty = self.infer(&exp)?;
         let sub = self.cons.solve()?;
-        
+
         self.env.recover(old);
 
         let sc = self.generalize(&ty.subst(&sub));

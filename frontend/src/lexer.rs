@@ -1,30 +1,30 @@
 use std::fmt::Display;
 
-use logos::{self,Span,Logos,Lexer};
+use logos::{self, Lexer, Logos, Span};
 
 #[derive(Logos, Debug, Eq, PartialEq, Clone, Copy)]
 pub enum Token {
     #[token("(")]
     LParen,
-    
+
     #[token(")")]
     RParen,
 
     #[token("[")]
     LBracket,
-    
+
     #[token("]")]
     RBracket,
 
     #[token("{")]
     LBrace,
-    
+
     #[token("}")]
     RBrace,
 
     #[token(",")]
     Comma,
-    
+
     #[token(";")]
     Semicolon,
 
@@ -39,10 +39,10 @@ pub enum Token {
 
     #[token("let")]
     Let,
-    
+
     #[token("in")]
     In,
-    
+
     #[token("end")]
     End,
 
@@ -63,10 +63,10 @@ pub enum Token {
 
     #[token("fn")]
     Fn,
-    
+
     #[token("=>")]
     EArrow,
-    
+
     #[token("->")]
     Arrow,
 

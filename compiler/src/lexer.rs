@@ -14,11 +14,11 @@ pub enum Token {
     RBracket,
     LBrace,
     RBrace,
-    
+
     Comma,
     Semicolon,
     Bar,
-    Wild, 
+    Wild,
     Equal,
 
     Let,
@@ -65,7 +65,6 @@ impl fmt::Display for Token {
     }
 }
 
-
 pub fn is_reserved(str: &str) -> Option<Token> {
     let tok = match str {
         "fn" => Token::Fn,
@@ -79,11 +78,13 @@ pub fn is_reserved(str: &str) -> Option<Token> {
         "of" => Token::Of,
         "true" => Token::Bool(true),
         "false" => Token::Bool(false),
-        "Int" => Token::LitType(builtin(INT_ID)),
-        "Real" => Token::LitType(builtin(REAL_ID)),
-        "Bool" => Token::LitType(builtin(BOOL_ID)),
-        "Char" => Token::LitType(builtin(CHAR_ID)),
-        _ => { return None; }
+        "Int" => Token::LitType(S_TY_INT),
+        "Real" => Token::LitType(S_TY_REAL),
+        "Bool" => Token::LitType(S_TY_BOOL),
+        "Char" => Token::LitType(S_TY_CHAR),
+        _ => {
+            return None;
+        }
     };
     Some(tok)
 }
@@ -130,7 +131,7 @@ impl<'src> Lexer<'src> {
         Some(ch)
     }
 
-    fn peek_satisfy(&mut self, f: fn(char)->bool) -> Option<char> {
+    fn peek_satisfy(&mut self, f: fn(char) -> bool) -> Option<char> {
         let ch = self.peek_char()?;
         if f(ch) {
             Some(ch)
@@ -139,7 +140,7 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    fn next_satisfy(&mut self, f: fn(char)->bool) -> Option<char> {
+    fn next_satisfy(&mut self, f: fn(char) -> bool) -> Option<char> {
         let ch = self.peek_char()?;
         if f(ch) {
             self.next_char()
@@ -148,7 +149,7 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    fn skip_satisfy(&mut self, f: fn(char)->bool) {
+    fn skip_satisfy(&mut self, f: fn(char) -> bool) {
         while let Some(ch) = self.peek_char() {
             if f(ch) {
                 self.next_char();
@@ -158,136 +159,131 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    fn comment_block(&mut self) -> Result<(),String> {
+    fn comment_block(&mut self) -> Result<(), String> {
         let mut level = 1;
 
         // an automat of 3 states
         let mut state = 0;
 
         while level > 0 {
-            let ch = self.next_char()
+            let ch = self
+                .next_char()
                 .ok_or("comment block not closed!".to_string())?;
 
             match state {
-                0 => {
-                    match ch {
-                        '*' => { state = 1 }
-                        '/' => { state = 2 }
-                        _ => {}
+                0 => match ch {
+                    '*' => state = 1,
+                    '/' => state = 2,
+                    _ => {}
+                },
+                1 => match ch {
+                    '/' => {
+                        level -= 1;
+                        state = 0
                     }
-                }
-                1 => {
-                    match ch {
-                        '/' => { level -= 1; state = 0 }
-                        _ => { state = 0 }
+                    _ => state = 0,
+                },
+                2 => match ch {
+                    '*' => {
+                        level += 1;
+                        state = 0
                     }
+                    _ => state = 0,
+                },
+                _ => {
+                    unreachable!()
                 }
-                2 => {
-                    match ch {
-                        '*' => { level += 1; state = 0 }
-                        _ => { state = 0 }
-                    }
-                }
-                _ => { unreachable!() }
             }
         }
 
         Ok(())
     }
 
-
-    pub fn next_token(&mut self) -> Result<(Token,Span),String> {
-
+    pub fn next_token(&mut self) -> Result<(Token, Span), String> {
         // skip all whitespaces
-        self.skip_satisfy(|ch|ch.is_ascii_whitespace());
+        self.skip_satisfy(|ch| ch.is_ascii_whitespace());
 
         let start = self.position();
 
         match self.next_char() {
-            Some('/') => {
-                match self.next_char() {
-                    Some('/') => {
-                        self.skip_satisfy(|ch|ch != '\n');
-                        self.next_token()
-                    }
-                    Some('*') => {
-                        self.comment_block()?;
-                        self.next_token()
-                    }
-                    Some(_) => {
-                        Err("divide not supported yet!".to_string())
-                    }
-                    None => {
-                        Err("lexing failed!".to_string())
-                    }
+            Some('/') => match self.peek_char() {
+                Some('/') => {
+                    self.next_char();
+                    self.skip_satisfy(|ch| ch != '\n');
+                    self.next_token()
                 }
-            }
-            Some('=') => {
-                match self.peek_char() {
-                    Some('>') => {
-                        self.next_char();
-                        let end = self.position();
-                        Ok((Token::EArrow,Span::new(start,end)))
-                    }
-                    _ => {
-                        let end = self.position();
-                        Ok((Token::Equal,Span::new(start,end)))
-                    }
+                Some('*') => {
+                    self.next_char();
+                    self.comment_block()?;
+                    self.next_token()
                 }
-                
-            }
-            Some('-') => {
-                match self.peek_char() {
-                    Some('>') => {
-                        self.next_char();
-                        let end = self.position();
-                        Ok((Token::Arrow,Span::new(start,end)))
-                    }
-                    _ => {
-                        let end = self.position();
-                        Ok((Token::Prim(builtin(SUB_ID)),Span::new(start,end)))
-                    }
+                Some(_) => {
+                    let end = self.position();
+                    Ok((Token::Prim(S_IDIV), Span::new(start, end)))
                 }
-            }
+                None => Err("lexing failed!".to_string()),
+            },
+            Some('=') => match self.peek_char() {
+                Some('>') => {
+                    self.next_char();
+                    let end = self.position();
+                    Ok((Token::EArrow, Span::new(start, end)))
+                }
+                _ => {
+                    let end = self.position();
+                    Ok((Token::Equal, Span::new(start, end)))
+                }
+            },
+            Some('-') => match self.peek_char() {
+                Some('>') => {
+                    self.next_char();
+                    let end = self.position();
+                    Ok((Token::Arrow, Span::new(start, end)))
+                }
+                _ => {
+                    let end = self.position();
+                    Ok((Token::Prim(S_ISUB), Span::new(start, end)))
+                }
+            },
             Some('(') => {
                 let end = self.position();
-                Ok((Token::LParen,Span::new(start,end)))
+                Ok((Token::LParen, Span::new(start, end)))
             }
             Some(')') => {
                 let end = self.position();
-                Ok((Token::RParen,Span::new(start,end)))
+                Ok((Token::RParen, Span::new(start, end)))
             }
             Some('[') => {
                 let end = self.position();
-                Ok((Token::LBracket,Span::new(start,end)))
+                Ok((Token::LBracket, Span::new(start, end)))
             }
             Some(']') => {
                 let end = self.position();
-                Ok((Token::RBracket,Span::new(start,end)))
+                Ok((Token::RBracket, Span::new(start, end)))
             }
             Some('{') => {
                 let end = self.position();
-                Ok((Token::LBrace,Span::new(start,end)))
+                Ok((Token::LBrace, Span::new(start, end)))
             }
             Some('}') => {
                 let end = self.position();
-                Ok((Token::RBrace,Span::new(start,end)))
+                Ok((Token::RBrace, Span::new(start, end)))
             }
             Some(',') => {
                 let end = self.position();
-                Ok((Token::RBrace,Span::new(start,end)))
+                Ok((Token::RBrace, Span::new(start, end)))
             }
             Some(';') => {
                 let end = self.position();
-                Ok((Token::Semicolon,Span::new(start,end)))
+                Ok((Token::Semicolon, Span::new(start, end)))
             }
             Some('|') => {
                 let end = self.position();
-                Ok((Token::Bar,Span::new(start,end)))
+                Ok((Token::Bar, Span::new(start, end)))
             }
             Some('_') => {
                 let end = self.position();
-                Ok((Token::Wild,Span::new(start,end)))
+                Ok((Token::Wild, Span::new(start, end)))
             }
             Some(x) if x.is_ascii_alphabetic() => {
                 let upper = x.is_uppercase();
@@ -315,19 +311,16 @@ impl<'src> Lexer<'src> {
                     }
                 }
 
-                Ok((tok,Span::new(start, end)))
+                Ok((tok, Span::new(start, end)))
             }
-            
-            Some(x) if x.is_ascii_digit() => {
 
-                self.skip_satisfy(|ch|ch.is_ascii_digit());
+            Some(x) if x.is_ascii_digit() => {
+                self.skip_satisfy(|ch| ch.is_ascii_digit());
 
                 if self.peek_char() != Some('.') {
                     let end = self.position();
-                    let val: i64 = self
-                        .source[start.pos..end.pos]
-                        .parse().unwrap();
-                    return Ok((Token::Int(val),Span::new(start, end)));
+                    let val: i64 = self.source[start.pos..end.pos].parse().unwrap();
+                    return Ok((Token::Int(val), Span::new(start, end)));
                 } else {
                     self.next_char();
                 }
@@ -337,14 +330,12 @@ impl<'src> Lexer<'src> {
                     // at least one digit
                     self.skip_satisfy(|ch| ch.is_ascii_digit());
                 } else {
-                    return Err("Real number without fractional part!".to_string())
+                    return Err("Real number without fractional part!".to_string());
                 }
 
                 let end = self.position();
-                let val: f64 = self
-                        .source[start.pos..end.pos]
-                        .parse().unwrap();
-                Ok((Token::Real(val),Span::new(start, end)))
+                let val: f64 = self.source[start.pos..end.pos].parse().unwrap();
+                Ok((Token::Real(val), Span::new(start, end)))
             }
             None => {
                 if self.is_end {
@@ -353,21 +344,28 @@ impl<'src> Lexer<'src> {
                     self.is_end = true;
                 }
                 let end = self.position();
-                Ok((Token::EndOfFile,Span::new(start, end)))
+                Ok((Token::EndOfFile, Span::new(start, end)))
             }
-            Some(ch) => {
-                Err(format!("lexing failed at {ch}!"))
-            }
+            Some(ch) => Err(format!("lexing failed at {ch}!")),
         }
     }
-    
 }
-
 
 #[test]
 fn lexer_test() {
-    let string = "fn f x => (f 42 (true) 3.1415)";
+    //let string = "fn f x => (f 42 (true) 3.1415)";
     //let string = "fn f g x => (f x) g x";
+
+    let string = "
+        let
+            val x = 42
+            type MyInt = Int
+            data Color = Red | Blue | Green
+        in
+            x
+        end
+    ";
+
     let mut lex = Lexer::new(string);
 
     while let Ok(tok) = lex.next_token() {

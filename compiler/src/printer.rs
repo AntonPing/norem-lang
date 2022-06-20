@@ -1,12 +1,34 @@
 use std::fmt;
 
-use crate::symbol::*;
 use crate::ast::*;
+use crate::core::{CExpr, Atom, CDecl};
+use crate::symbol::*;
 
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut pr = Printer::new(50);
         pr.print_expr(f, self)
+    }
+}
+
+impl fmt::Display for Decl {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut pr = Printer::new(50);
+        pr.print_decl(f, self)
+    }
+}
+
+impl fmt::Display for CExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut pr = Printer::new(50);
+        pr.print_cexpr(f, self)
+    }
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut pr = Printer::new(50);
+        pr.print_type(f, self)
     }
 }
 
@@ -35,7 +57,9 @@ impl Printer {
     }
 
     pub fn nested<F>(&mut self, indent: usize, func: F) -> fmt::Result
-    where F : FnOnce(&mut Printer) -> fmt::Result {
+    where
+        F: FnOnce(&mut Printer) -> fmt::Result,
+    {
         self.indent += indent;
         let res = func(self);
         self.indent -= indent;
@@ -44,10 +68,65 @@ impl Printer {
 
     pub fn print_lit_val(&self, f: &mut fmt::Formatter, lit: &LitVal) -> fmt::Result {
         match lit {
-            LitVal::Int(x) => write!(f,"{x}"),
-            LitVal::Real(x) => write!(f,"{x}"),
-            LitVal::Bool(x) => write!(f,"{x}"),
-            LitVal::Char(x) => write!(f,"{x}"),
+            LitVal::Int(x) => write!(f, "{x}"),
+            LitVal::Real(x) => write!(f, "{x}"),
+            LitVal::Bool(x) => write!(f, "{x}"),
+            LitVal::Char(x) => write!(f, "{x}"),
+        }
+    }
+
+    pub fn print_varient(&mut self, f: &mut fmt::Formatter, var: &Variant) -> fmt::Result {
+        write!(f, "<varient>")
+    }
+
+    pub fn print_type(&mut self, f: &mut fmt::Formatter, typ: &Type) -> fmt::Result {
+        write!(f, "<type>")
+    }
+
+    pub fn print_decl(&mut self, f: &mut fmt::Formatter, decl: &Decl) -> fmt::Result {
+        match decl {
+            Decl::Val(decl) => {
+                let DeclVal { name, args, body, span: _ } = decl;
+                write!(f, "val {name}")?;
+                for arg in args {
+                    write!(f, " {arg}")?;
+                }
+                write!(f, " = ")?;
+                self.print_expr(f, body)
+            }
+            Decl::Data(decl) => {
+                let DeclData { name, args, vars, span: _ } = decl;
+                write!(f, "data {name}")?;
+                for arg in args {
+                    write!(f, " {arg}")?;
+                }
+                write!(f, " = ")?;
+
+                let mut first = true;
+                for var in vars {
+                    if first {
+                        first = false;
+                    } else {
+                        write!(f, " | ")?;
+                    }
+                    self.print_varient(f, var)?;
+                }
+                Ok(())
+            }
+            Decl::Type(decl) => {
+                let DeclType {
+                    name,
+                    args,
+                    typ,
+                    span: _,
+                } = decl;
+                write!(f, "type {name}")?;
+                for arg in args {
+                    write!(f, " {arg}")?;
+                }
+                write!(f, " = ")?;
+                self.print_type(f, typ)
+            }
         }
     }
 
@@ -59,36 +138,183 @@ impl Printer {
             }
             Expr::Prim(prim) => {
                 let ExprPrim { prim, span: _ } = prim;
-                write!(f,"{prim}")
+                write!(f, "{prim:?}")
             }
-            Expr::Var(var) => {
-                let ExprVar { ident, span: _ } = var;
-                write!(f,"{ident}")
+            Expr::Var(expr) => {
+                let ExprVar { ident, span: _ } = expr;
+                write!(f, "{ident}")
             }
-            Expr::Lam(lam) => {
-                let ExprLam { args, body, span: _ } = lam;
-                write!(f,"fn")?;
+            Expr::Lam(expr) => {
+                let ExprLam { args, body, span: _ } = expr;
+                write!(f, "fn")?;
                 for arg in args {
-                    write!(f," {arg}")?;
+                    write!(f, " {arg}")?;
                 }
-                write!(f," => ")?;
+                write!(f, " => ")?;
                 self.nested(2, |p| {
                     p.newline(f)?;
                     p.print_expr(f, body)
                 })
             }
-            Expr::App(app) => {
-                let ExprApp { func, args, span: _ } = app;
-                write!(f,"(")?;
+            Expr::App(expr) => {
+                let ExprApp { func, args, span: _ } = expr;
+                write!(f, "(")?;
                 self.print_expr(f, func)?;
                 for arg in args {
-                    write!(f," ")?;
+                    write!(f, " ")?;
                     self.print_expr(f, arg)?;
+                }
+                write!(f, ")")
+            }
+            Expr::Let(expr) => {
+                let ExprLet { decls, body, span: _ } = expr;
+                write!(f, "let")?;
+                self.nested(2, |p| {
+                    p.newline(f)?;
+                    let last = decls.len() - 1;
+                    for decl in &decls[0..last] {
+                        p.print_decl(f, decl)?;
+                        p.newline(f)?;
+                    }
+                    p.print_decl(f, &decls[last])?;
+                    Ok(())
+                })?;
+                self.newline(f)?;
+                write!(f, "in")?;
+                self.nested(2, |p| {
+                    p.newline(f)?;
+                    p.print_expr(f, body)
+                })?;
+                self.newline(f)?;
+                write!(f, "end")
+            }
+            Expr::Case(expr) => {
+                let ExprCase { expr, rules, span: _ } = expr;
+                write!(f, "case ")?;
+                self.print_expr(f, expr)?;
+                write!(f, " of")?;
+                self.nested(2, |p| {
+                    p.newline(f)?;
+                    let last = rules.len() - 1;
+                    for rule in &rules[0..last] {
+                        p.print_rule(f, rule)?;
+                        p.newline(f)?;
+                    }
+                    p.print_rule(f, &rules[last])?;
+                    Ok(())
+                })
+            }
+        }
+    }
+    pub fn print_rule(&mut self, f: &mut fmt::Formatter, rule: &Rule) -> fmt::Result {
+        let Rule { pat, body, span: _ } = rule;
+        write!(f, "| ")?;
+        self.print_pattern(f, pat)?;
+        write!(f, " => ")?;
+        self.print_expr(f, body)
+    }
+
+    pub fn print_pattern(&mut self, f: &mut fmt::Formatter, pat: &Pattern) -> fmt::Result {
+        match pat {
+            Pattern::App(cons, args) if args.len() > 0 => {
+                write!(f, "({cons}")?;
+                for arg in args {
+                    write!(f, " ")?;
+                    self.print_pattern(f, arg)?;
+                }
+                write!(f, ")")
+            }
+            Pattern::App(cons, _) => write!(f, "{cons}"),
+            Pattern::Lit(lit) => self.print_lit_val(f, lit),
+            Pattern::Var(sym) => write!(f, "{sym}"),
+            Pattern::Wild => write!(f, "_"),
+        }
+    }
+
+
+    pub fn print_atom(&mut self, f: &mut fmt::Formatter, atom: &Atom) -> fmt::Result {
+        match atom {
+            Atom::Var(x) => write!(f,"{x}"),
+            Atom::Glob(x) => write!(f,"@{x}"),
+            Atom::Reg(x) => write!(f,"reg{x}"),
+            Atom::Prim(x) => write!(f,"{x:?}"),
+            Atom::Int(x) => write!(f,"{x}"),
+            Atom::Real(x) => write!(f,"{x}"),
+            Atom::Bool(x) => write!(f,"{x}"),
+            Atom::Char(x) => write!(f,"{x}"),
+        }
+    }
+
+    pub fn print_cdecl(&mut self, f: &mut fmt::Formatter, decl: &CDecl) -> fmt::Result {
+        let CDecl { func, args, body } = decl;
+        write!(f,"{func}(")?;
+        let mut first = true;
+        for arg in args {
+            if first {
+                first = false;
+            } else {
+                write!(f," ")?;
+            }
+            write!(f,"{arg}")?;
+        }
+        write!(f," = ")?;
+        self.print_cexpr(f, body)
+    }
+
+    pub fn print_cexpr(&mut self, f: &mut fmt::Formatter, expr: &CExpr) -> fmt::Result {
+        match expr {
+            CExpr::App(func, args) => {
+                self.print_atom(f, func)?;
+                write!(f,"(")?;
+                let mut first = true;
+                for arg in args {
+                    if first {
+                        first = false;
+                    } else {
+                        write!(f," ")?;
+                    }
+                    self.print_atom(f, arg)?;
                 }
                 write!(f,")")
             }
-            Expr::Let(_) => todo!(),
-            Expr::Case(_) => todo!(),
+            CExpr::Let(decl, body) => {
+                write!(f,"let ")?;
+                self.print_cdecl(f, decl)?;
+                write!(f," in ")?;
+                self.print_cexpr(f, body)
+            }
+            CExpr::Fix(decls, body) => {
+                write!(f, "let")?;
+                self.nested(2, |p| {
+                    p.newline(f)?;
+                    let last = decls.len() - 1;
+                    for decl in &decls[0..last] {
+                        p.print_cdecl(f, decl)?;
+                        p.newline(f)?;
+                    }
+                    p.print_cdecl(f, &decls[last])?;
+                    Ok(())
+                })?;
+                self.newline(f)?;
+                write!(f, "in")?;
+                self.nested(2, |p| {
+                    p.newline(f)?;
+                    p.print_cexpr(f, body)
+                })?;
+                self.newline(f)?;
+                write!(f, "end")
+            }
+            CExpr::Uniop(prim, arg1, ret, cont) => {
+                
+
+            }
+            CExpr::Binop(_, _, _, _, _) => todo!(),
+            CExpr::Switch(_, _) => todo!(),
+            CExpr::Ifte(_, _, _) => todo!(),
+            CExpr::Record(_, _, _) => todo!(),
+            CExpr::Select(_, _, _, _) => todo!(),
+            CExpr::Halt(_) => todo!(),
+            CExpr::Tag(_, _) => todo!(),
         }
     }
 }

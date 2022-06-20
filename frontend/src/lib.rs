@@ -1,8 +1,8 @@
-pub mod utils;
-pub mod symbol;
 pub mod ast;
-pub mod pretty;
-pub mod lexer;
-pub mod parser;
 pub mod check;
 pub mod infer;
+pub mod lexer;
+pub mod parser;
+pub mod pretty;
+pub mod symbol;
+pub mod utils;

@@ -1,7 +1,6 @@
-use logos::Span;
 use crate::symbol::*;
 use crate::utils::*;
-
+use logos::Span;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
@@ -9,8 +8,8 @@ pub enum Expr {
     Var(Symbol),
     Cons(Symbol),
     Lam(Vec<Symbol>, Spanned<Expr>),
-    App(Spanned<Expr>,Vec<Spanned<Expr>>),
-    Let(Vec<Spanned<Decl>>,Spanned<Expr>),
+    App(Spanned<Expr>, Vec<Spanned<Expr>>),
+    Let(Vec<Spanned<Decl>>, Spanned<Expr>),
     Case(Spanned<Expr>, Vec<Spanned<Rule>>),
     Ifte(Spanned<Expr>, Spanned<Expr>, Spanned<Expr>),
     //Do(Vec<Statment>,Spanned<Expr>),
@@ -185,5 +184,3 @@ pub struct Primitive {
     pub ty: Type,
 }
 */
-
-

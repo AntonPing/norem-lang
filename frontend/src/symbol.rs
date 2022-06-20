@@ -1,35 +1,24 @@
 use std::collections::HashMap;
 use std::fmt;
 
-
 const BUILTIN: [&'static str; 11] = [
-    "and",
-    "or",
-    "not",
-    "+",
-    "-",
-    "*",
-    "/",
-    "Int",
-    "Char",
-    "Bool",
-    "Real"
+    "and", "or", "not", "+", "-", "*", "/", "Int", "Char", "Bool", "Real",
 ];
 
-pub const MIN_BUILDIN : usize = 0;
-pub const MAX_BUILDIN : usize = 10;
+pub const MIN_BUILDIN: usize = 0;
+pub const MAX_BUILDIN: usize = 10;
 
-pub const AND_ID : usize = 0;
-pub const OR_ID : usize = 1;
-pub const NOT_ID : usize = 2;
-pub const ADD_ID : usize = 3;
-pub const SUB_ID : usize = 4;
-pub const MUL_ID : usize = 5;
-pub const DIV_ID : usize = 6;
-pub const INT_ID : usize = 7;
-pub const CHAR_ID : usize = 8;
-pub const BOOL_ID : usize = 9;
-pub const REAL_ID : usize = 10;
+pub const AND_ID: usize = 0;
+pub const OR_ID: usize = 1;
+pub const NOT_ID: usize = 2;
+pub const ADD_ID: usize = 3;
+pub const SUB_ID: usize = 4;
+pub const MUL_ID: usize = 5;
+pub const DIV_ID: usize = 6;
+pub const INT_ID: usize = 7;
+pub const CHAR_ID: usize = 8;
+pub const BOOL_ID: usize = 9;
+pub const REAL_ID: usize = 10;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Symbol {
@@ -43,10 +32,11 @@ impl Symbol {
     pub fn is_buildin(&self, id: usize) -> bool {
         if let Symbol::Var(u) = self {
             *u == id
-        } else { false }
+        } else {
+            false
+        }
     }
 }
-
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SymTable {
@@ -55,7 +45,7 @@ pub struct SymTable {
     // for int to symb
     sym_vec: Vec<String>,
     // number of generated symbol
-    gensym_idx : usize,
+    gensym_idx: usize,
 }
 
 impl SymTable {
@@ -66,7 +56,7 @@ impl SymTable {
         }
         table
     }
-    
+
     pub fn with_capacity(n: usize) -> SymTable {
         SymTable {
             sym_map: HashMap::with_capacity(n),
@@ -107,11 +97,16 @@ impl fmt::Debug for Symbol {
         match self {
             &Symbol::Var(n) => write!(f, "sym({})", n),
             &Symbol::Gen(n) => write!(f, "#{}", n),
-            &Symbol::Forall(n) => write!(f,"{}",
-                "abcdefghijklmnopqrstuvwxyz".to_string().chars().nth(n).unwrap()
+            &Symbol::Forall(n) => write!(
+                f,
+                "{}",
+                "abcdefghijklmnopqrstuvwxyz"
+                    .to_string()
+                    .chars()
+                    .nth(n)
+                    .unwrap()
             ),
             //&Symbol::Wild => write!(f, "_")
         }
     }
 }
-

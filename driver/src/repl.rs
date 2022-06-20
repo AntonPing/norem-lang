@@ -1,19 +1,16 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rustyline::{Editor, Result};
 use rustyline::error::ReadlineError;
 use rustyline::validate::{
-    MatchingBracketValidator,
-    ValidationContext,
-    ValidationResult,
-    Validator,
+    MatchingBracketValidator, ValidationContext, ValidationResult, Validator,
 };
+use rustyline::{Editor, Result};
 use rustyline_derive::{Completer, Helper, Highlighter, Hinter};
 
-use norem_frontend::symbol::{self, SymTable};
 use norem_frontend::parser;
 use norem_frontend::pretty::{self, Print};
+use norem_frontend::symbol::{self, SymTable};
 // use crate::infer;
 
 #[derive(Completer, Helper, Highlighter, Hinter)]
@@ -28,7 +25,6 @@ impl Validator for InputValidator {
 }
 
 pub fn run_repl() {
-
     let h = InputValidator {
         brackets: MatchingBracketValidator::new(),
     };
@@ -45,15 +41,15 @@ pub fn run_repl() {
                 rl.add_history_entry(line.as_str());
                 let input = String::from(line);
                 command_line(input.as_str());
-            },
+            }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
                 break;
-            },
+            }
             Err(ReadlineError::Eof) => {
                 println!("CTRL-D");
                 break;
-            },
+            }
             Err(err) => {
                 println!("Error: {:?}", err);
                 break;
@@ -61,25 +57,23 @@ pub fn run_repl() {
         }
     }
     rl.save_history("history.txt").unwrap();
-    
 }
 
-fn command_line<'src,'tbl>(input: &'src str) {
+fn command_line<'src, 'tbl>(input: &'src str) {
     use parser::*;
     use pretty::*;
     use symbol::*;
 
-
     let table = Rc::new(RefCell::new(SymTable::new()));
     let mut p = Parser::new(input, table.clone());
-    let mut pp = PrettyPrinter::new(120,table.clone());
+    let mut pp = PrettyPrinter::new(120, table.clone());
     if let Some(res) = p.read_app() {
         pp.print(&res);
-        println!("result {}",pp.render());
+        println!("result {}", pp.render());
         //let mut ti = infer::Infer::new(table.clone());
         //let ty = ti.infer_top(&res);
         //println!("type {:?}",ty);
     }
 
-    println!("cmd {}",input);
+    println!("cmd {}", input);
 }

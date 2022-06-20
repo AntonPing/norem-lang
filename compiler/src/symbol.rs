@@ -1,6 +1,8 @@
-use std::fmt;
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::Mutex;
+
+use crate::ast::Prim;
 
 lazy_static::lazy_static! {
     static ref GLOB_TABLE: Mutex<SymbTable> = {
@@ -12,8 +14,8 @@ lazy_static::lazy_static! {
 pub enum Symbol {
     BuiltIn(usize),
     Var(usize),
-    VarN(usize,usize),
-    Gen(char,usize),
+    VarN(usize, usize),
+    Gen(char, usize),
     Str(usize),
     //Forall(usize),
 }
@@ -24,7 +26,6 @@ impl Default for Symbol {
     }
 }
 
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct SymbTable {
     // for symb to int
@@ -32,7 +33,7 @@ pub struct SymbTable {
     // for int to symb
     sym_vec: Vec<String>,
     // number of generated symbol
-    gensym_idx : usize,
+    gensym_idx: usize,
     // for all constant string
     str_vec: Vec<String>,
 }
@@ -47,7 +48,7 @@ impl SymbTable {
         */
         table
     }
-    
+
     pub fn with_capacity(n: usize) -> SymbTable {
         SymbTable {
             sym_map: HashMap::with_capacity(n),
@@ -71,7 +72,7 @@ impl SymbTable {
     pub fn gensym(&mut self, ch: char) -> Symbol {
         let old = self.gensym_idx;
         self.gensym_idx += 1;
-        Symbol::Gen(ch,old)
+        Symbol::Gen(ch, old)
     }
 
     pub fn newstr(&mut self, s: String) -> Symbol {
@@ -107,11 +108,11 @@ impl fmt::Display for Symbol {
             &Symbol::Var(x) => {
                 write!(f, "{}", table.get_idx(x).unwrap())
             }
-            &Symbol::VarN(x,n) => {
+            &Symbol::VarN(x, n) => {
                 write!(f, "{}_{n}", table.get_idx(x).unwrap())
             }
-            &Symbol::Gen(ch,n) => {
-                write!(f, "#{}_{}",ch, n)
+            &Symbol::Gen(ch, n) => {
+                write!(f, "#{}_{}", ch, n)
             }
             &Symbol::Str(n) => {
                 write!(f, "{}", table.get_str(n).unwrap())
@@ -134,41 +135,69 @@ pub fn builtin(id: usize) -> Symbol {
     Symbol::BuiltIn(id)
 }
 
-const BUILTIN: [&'static str; 11] = [
-    "and",
-    "or",
-    "not",
+
+macro_rules! globals {
+    (@step $idx:expr, ) => {
+        pub const S_TOTAL_GLOBALS: usize = $idx;
+    };
+    (@step $idx:expr, $it:ident, $($rest:ident,)*) => {
+        pub const $it: Symbol = Symbol::BuiltIn($idx as usize);
+        globals!(@step $idx+1usize, $($rest,)*);
+    };
+    ($($name:ident),+) => {
+        //const BUILTIN: [&'static str; S_TOTAL_GLOBALS];
+        globals!(@step 0usize, $($name,)*);
+    };
+}
+
+globals!(
+    S_TY_INT,
+    S_TY_REAL,
+    S_TY_BOOL,
+    S_TY_CHAR,
+    S_IADD,
+    S_ISUB,
+    S_IMUL,
+    S_IDIV,
+    S_INEG,
+    S_BNOT
+);
+
+const BUILTIN: [&'static str; S_TOTAL_GLOBALS] = [
+    "Int",
+    "Real",
+    "Bool",
+    "Char",
     "+",
     "-",
     "*",
     "/",
-    "Int",
-    "Char",
-    "Bool",
-    "Real"
+    "~",
+    "!",
 ];
 
-pub const MIN_BUILDIN : usize = 0;
-pub const MAX_BUILDIN : usize = 256;
-
-pub const AND_ID : usize = 0;
-pub const OR_ID : usize = 1;
-pub const NOT_ID : usize = 2;
-pub const ADD_ID : usize = 3;
-pub const SUB_ID : usize = 4;
-pub const MUL_ID : usize = 5;
-pub const DIV_ID : usize = 6;
-pub const INT_ID : usize = 7;
-pub const CHAR_ID : usize = 8;
-pub const BOOL_ID : usize = 9;
-pub const REAL_ID : usize = 10;
 
 
 impl Symbol {
-    pub fn is_buildin(&self, id: usize) -> bool {
-        if let Symbol::Var(u) = self {
-            *u == id
-        } else { false }
+    pub fn as_buildin(&self) -> Option<usize> {
+        if let Symbol::BuiltIn(n) = self {
+            Some(*n)
+        } else {
+            None
+        }
+    }
+    pub fn to_prim(&self) -> Prim {
+        if let Some(id) = self.as_buildin() {
+            match id {
+                ADD_ID => Prim::IAdd,
+                SUB_ID => Prim::ISub,
+                MUL_ID => Prim::IMul,
+                DIV_ID => Prim::IDiv,
+                NEG_ID => Prim::INeg,
+                NOT_ID => Prim::BNot,
+            }
+        } else {
+            panic!("should be a built-in!");
+        }
     }
 }
-

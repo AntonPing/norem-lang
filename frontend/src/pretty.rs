@@ -1,12 +1,12 @@
 use std::cell::RefCell;
-use std::fmt::{self, Formatter, Display};
-use std::io::{self, Write};
 use std::collections::VecDeque;
+use std::fmt::{self, Display, Formatter};
+use std::io::{self, Write};
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::symbol::*;
 use crate::ast::*;
+use crate::symbol::*;
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 enum Command {
@@ -28,11 +28,7 @@ pub struct PrettyPrinter {
 }
 
 impl PrettyPrinter {
-    pub fn new(
-        max: usize,
-        table: Rc<RefCell<SymTable>>
-    ) -> PrettyPrinter {
-
+    pub fn new(max: usize, table: Rc<RefCell<SymTable>>) -> PrettyPrinter {
         PrettyPrinter {
             indent: 0,
             width: 0,
@@ -74,7 +70,7 @@ impl PrettyPrinter {
                 }
                 Command::Text(s) => {
                     self.width += s.len();
-                    if self.width  >= self.max_width {
+                    if self.width >= self.max_width {
                         self.newline(f)?;
                         self.width = self.indent + s.len();
                     }
@@ -92,7 +88,9 @@ impl PrettyPrinter {
     }
 
     pub fn wrapped<F>(&mut self, width: usize, body: F) -> &mut Self
-    where F: for<'a> Fn(&'a mut PrettyPrinter) -> &'a mut PrettyPrinter {
+    where
+        F: for<'a> Fn(&'a mut PrettyPrinter) -> &'a mut PrettyPrinter,
+    {
         self.commands.push_back(Command::Wrap(width));
         body(self);
         self.commands.push_back(Command::Unwrap);
@@ -100,7 +98,9 @@ impl PrettyPrinter {
     }
 
     pub fn nested<F>(&mut self, width: usize, body: F) -> &mut Self
-    where F: for<'a> Fn(&'a mut PrettyPrinter) -> &'a mut PrettyPrinter {
+    where
+        F: for<'a> Fn(&'a mut PrettyPrinter) -> &'a mut PrettyPrinter,
+    {
         self.commands.push_back(Command::Indent(width));
         body(self);
         self.commands.push_back(Command::Dedent(width));
@@ -118,7 +118,9 @@ impl PrettyPrinter {
     }
 
     pub fn surrounded<F>(&mut self, left: F, body: F, right: F) -> &mut Self
-    where F: for<'a> Fn(&'a mut PrettyPrinter) -> &'a mut PrettyPrinter {
+    where
+        F: for<'a> Fn(&'a mut PrettyPrinter) -> &'a mut PrettyPrinter,
+    {
         left(self);
         body(self);
         right(self);
@@ -126,7 +128,9 @@ impl PrettyPrinter {
     }
 
     pub fn seperated<F>(&mut self, vec: Vec<F>, delim: F) -> &mut Self
-    where F: for<'a> Fn(&'a mut PrettyPrinter) -> &'a mut PrettyPrinter {
+    where
+        F: for<'a> Fn(&'a mut PrettyPrinter) -> &'a mut PrettyPrinter,
+    {
         if !vec.is_empty() {
             vec[0](self);
             for elem in &vec[1..] {
@@ -147,7 +151,7 @@ impl PrettyPrinter {
         self
     }
 
-    pub fn print_many<T: Print,D: Display>(&mut self, vec: &Vec<T>, delim: &D) -> &mut Self {
+    pub fn print_many<T: Print, D: Display>(&mut self, vec: &Vec<T>, delim: &D) -> &mut Self {
         if !vec.is_empty() {
             vec[0].print(self);
             for elem in &vec[1..] {
@@ -157,7 +161,11 @@ impl PrettyPrinter {
         }
         self
     }
-    pub fn print_many_ref<T: Deref<Target = U>,U: Print,D: Display>(&mut self, vec: &Vec<T>, delim: &D) -> &mut Self {
+    pub fn print_many_ref<T: Deref<Target = U>, U: Print, D: Display>(
+        &mut self,
+        vec: &Vec<T>,
+        delim: &D,
+    ) -> &mut Self {
         if !vec.is_empty() {
             vec[0].print(self);
             for elem in &vec[1..] {

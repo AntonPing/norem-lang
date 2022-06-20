@@ -1,9 +1,8 @@
-use std::collections::HashMap;
 use std::collections::hash_map;
-use std::fmt::{Debug, self};
-use std::hash::Hash;
+use std::collections::HashMap;
 use std::default::Default;
-
+use std::fmt::{self, Debug};
+use std::hash::Hash;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Position {
@@ -14,13 +13,13 @@ pub struct Position {
 
 impl Position {
     pub fn new(pos: usize, row: usize, col: usize) -> Position {
-        Position { pos , row, col }
+        Position { pos, row, col }
     }
 }
 
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
-        write!(f,"{:?}:{:?}({:?})", self.row, self.col, self.pos)
+        write!(f, "{:?}:{:?}({:?})", self.row, self.col, self.pos)
     }
 }
 
@@ -33,30 +32,30 @@ pub struct Span {
 
 impl Span {
     pub fn new(start: Position, end: Position) -> Span {
-        Span { start , end }
+        Span { start, end }
     }
 }
 
 impl fmt::Display for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
-        write!(f,"&[{}...{}]", self.start, self.end)
+        write!(f, "&[{}...{}]", self.start, self.end)
     }
 }
 
-
-
 // multiset
 
-pub struct MultiSet<T>(HashMap<T,usize>);
+pub struct MultiSet<T>(HashMap<T, usize>);
 
-impl<T> MultiSet<T> where T: Hash + Eq {
-
+impl<T> MultiSet<T>
+where
+    T: Hash + Eq,
+{
     pub fn new() -> MultiSet<T> {
         MultiSet(HashMap::new())
     }
 
     pub fn insert(&mut self, elem: T) {
-        if let Some((k,v)) = self.0.remove_entry(&elem) {
+        if let Some((k, v)) = self.0.remove_entry(&elem) {
             self.0.insert(k, v + 1);
         } else {
             self.0.insert(elem, 1);
@@ -64,7 +63,7 @@ impl<T> MultiSet<T> where T: Hash + Eq {
     }
 
     pub fn remove(&mut self, elem: &T) {
-        if let Some((k,v)) = self.0.remove_entry(elem) {
+        if let Some((k, v)) = self.0.remove_entry(elem) {
             if v > 1 {
                 self.0.insert(k, v - 1);
             }
@@ -76,7 +75,7 @@ impl<T> MultiSet<T> where T: Hash + Eq {
     }
 
     pub fn get(&self, value: &T) -> usize {
-        self.0.get(value).map(|x|*x).unwrap_or(0)
+        self.0.get(value).map(|x| *x).unwrap_or(0)
     }
 
     pub fn contains(&self, value: &T) -> bool {
@@ -89,7 +88,7 @@ impl<T> MultiSet<T> where T: Hash + Eq {
 
     pub fn to_vec(self) -> Vec<T> {
         let mut vec = Vec::new();
-        for (k,_) in self.0 {
+        for (k, _) in self.0 {
             vec.push(k);
         }
         vec
@@ -97,15 +96,15 @@ impl<T> MultiSet<T> where T: Hash + Eq {
 }
 
 impl<T> IntoIterator for MultiSet<T> {
-    type Item = (T,usize) ;
-    type IntoIter = hash_map::IntoIter<T,usize>;
+    type Item = (T, usize);
+    type IntoIter = hash_map::IntoIter<T, usize>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
-pub fn no_repeat<T:Eq>(vec: Vec<T>) -> bool {
+pub fn no_repeat<T: Eq>(vec: Vec<T>) -> bool {
     for i in 0..vec.len() {
         for j in i..vec.len() {
             if vec[i] == vec[j] {
@@ -116,15 +115,14 @@ pub fn no_repeat<T:Eq>(vec: Vec<T>) -> bool {
     return true;
 }
 
-
 #[derive(Clone, Debug, PartialEq)]
-enum EnvOp<K,V> {
+enum EnvOp<K, V> {
     // has such key, old value covered
-    Update(K,V),
+    Update(K, V),
     // has no such key, the key was inserted
     Insert(K),
     // symbol was deleted from env
-    Delete(K,V),
+    Delete(K, V),
     // symbol not in env, no need to delete
     Nothing,
 }
@@ -175,7 +173,7 @@ impl<K,V> Env<K,V> where K: Eq + Hash + Clone {
     pub fn recover(&mut self, mark: usize) {
         for _ in mark..self.history.len() {
             if let Some(op) = self.history.pop() {
-                match op {    
+                match op {
                     EnvOp::Update(k,v) => {
                         let r = self.context.insert(k,v);
                         assert!(r.is_some());
@@ -199,3 +197,77 @@ impl<K,V> Env<K,V> where K: Eq + Hash + Clone {
     }
 }
 */
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum LogLevel {
+    Error,
+    Warn,
+    Info,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Message {
+    pub level: LogLevel,
+    pub title: String,
+    pub lines: Vec<String>,
+    pub span: Span,
+    pub other: Vec<Message>,
+}
+
+trait Logger : Sized {
+    fn into_msg(vec: Vec<Self>) -> Message;
+}
+
+impl Message {
+    pub fn error<S: Into<String>>(span: Span, title: S) -> Message {
+        Message {
+            level: LogLevel::Error,
+            title: title.into(),
+            lines: Vec::new(),
+            span,
+            other: Vec::new(),
+        }
+    }
+
+    pub fn warn<S: Into<String>>(span: Span, title: S) -> Message {
+        Message {
+            level: LogLevel::Warn,
+            title: title.into(),
+            lines: Vec::new(),
+            span,
+            other: Vec::new(),
+        }
+    }
+
+    pub fn info<S: Into<String>>(span: Span, title: S) -> Message {
+        Message {
+            level: LogLevel::Info,
+            title: title.into(),
+            lines: Vec::new(),
+            span,
+            other: Vec::new(),
+        }
+    }
+
+    pub fn message<S: Into<String>>(mut self, span: Span, msg: Message) -> Message {
+        self.other.push(msg);
+        self
+    }
+
+    pub fn lines(&self) -> std::ops::Range<usize> {
+        let mut range = std::ops::Range {
+            start: self.span.start.row,
+            end: self.span.end.row + 1,
+        };
+
+        for each in &self.other {
+            if each.span.start.row < range.start {
+                range.start = each.span.start.row;
+            }
+            if each.span.end.row + 1 > range.end {
+                range.end = each.span.end.row + 1;
+            }
+        }
+        range
+    }
+}
