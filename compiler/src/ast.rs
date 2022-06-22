@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::symbol::Symbol;
 use crate::utils::Span;
 
@@ -182,8 +184,13 @@ impl Prim {
             Prim::INeg => 1,
             Prim::BNot => 1,
         }
+    }   
+}
+
+impl fmt::Display for Prim {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"{self:?}")
     }
-    
 }
 
 

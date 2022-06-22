@@ -300,7 +300,7 @@ pub fn parse_expr_lam(p: &mut Parser) -> ParseResult<ExprLam> {
         p.match_token(Token::Fn)?;
         let args = p.many1(parse_var)?;
         p.match_token(Token::EArrow)?;
-        let body = parse_expr(p)?;
+        let body = parse_expr_outer(p)?;
         let body = Box::new(body);
         let span = p.end(start);
         Ok(ExprLam { args, body, span })
@@ -329,8 +329,9 @@ pub fn parse_expr_let(p: &mut Parser) -> ParseResult<ExprLet> {
         p.match_token(Token::Let)?;
         let decls = p.many1(parse_decl)?;
         p.match_token(Token::In)?;
-        let body = parse_expr(p)?;
+        let body = parse_expr_outer(p)?;
         let body = Box::new(body);
+        p.match_token(Token::End)?;
         let span = p.end(start);
         Ok(ExprLet { decls, body, span })
     })().map_err(|()| {
@@ -522,17 +523,11 @@ pub fn parse_type(p: &mut Parser) -> ParseResult<Type> {
 pub fn parse_single_type(p: &mut Parser) -> ParseResult<Type> {
     match p.token() {
         Token::LitType(sym) => {
-            if let Some(n) = sym.as_buildin() {
+            if sym.is_buildin() {
                 p.next()?;
-                match n {
-                    INT_ID => Ok(Type::Lit(LitType::Int)),
-                    REAL_ID => Ok(Type::Lit(LitType::Real)),
-                    BOOL_ID => Ok(Type::Lit(LitType::Bool)),
-                    CHAR_ID => Ok(Type::Lit(LitType::Char)),
-                    _ => panic!("unknown literal type!"),
-                }
+                Ok(Type::Lit(sym.to_lit_type()))
             } else {
-                panic!("non-literal type are lexed as Token::LitType!")
+                panic!("A non-builtin symbol is lexed as Token::LitType!");
             }
         }
         Token::LParen => {
@@ -596,6 +591,17 @@ pub fn parse_pattern(p: &mut Parser) -> ParseResult<Pattern> {
     })
 }
 
+pub fn parse_program(p: &mut Parser) -> ParseResult<Expr> {
+    p.match_token(Token::StartOfFile)?;
+    let res = parse_expr_outer(p)?;
+    if p.token() != Token::EndOfFile {
+        Err(())
+    } else {
+        Ok(res)
+    }
+}
+
+
 #[test]
 fn parser_test() {
     //let string = "fn f x => (f 42 (true) 3.1415)";
@@ -606,17 +612,16 @@ fn parser_test() {
             data Color = Red | Blue | Green
         in
             case c of
-            | (Red x 42) => 
+            | (Red x 42) => 3
             | (Blue (Red x 12) Green) => 2
             | Green => 3
             end
         end
     ";
     let mut par = Parser::new(string);
-    assert_eq!(par.token(), Token::StartOfFile);
-    par.next().unwrap();
 
-    let res = parse_expr(&mut par);
+
+    let res = parse_program(&mut par);
     if let Ok(res) = res {
         println!("{res}");
     } else {

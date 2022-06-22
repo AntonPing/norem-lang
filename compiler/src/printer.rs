@@ -1,7 +1,9 @@
 use std::fmt;
 
+use lazy_static::__Deref;
+
 use crate::ast::*;
-use crate::core::{CExpr, Atom, CDecl};
+use crate::core::*;
 use crate::symbol::*;
 
 impl fmt::Display for Expr {
@@ -231,59 +233,63 @@ impl Printer {
         }
     }
 
-
-    pub fn print_atom(&mut self, f: &mut fmt::Formatter, atom: &Atom) -> fmt::Result {
-        match atom {
-            Atom::Var(x) => write!(f,"{x}"),
-            Atom::Glob(x) => write!(f,"@{x}"),
-            Atom::Reg(x) => write!(f,"reg{x}"),
-            Atom::Prim(x) => write!(f,"{x:?}"),
-            Atom::Int(x) => write!(f,"{x}"),
-            Atom::Real(x) => write!(f,"{x}"),
-            Atom::Bool(x) => write!(f,"{x}"),
-            Atom::Char(x) => write!(f,"{x}"),
-        }
-    }
-
     pub fn print_cdecl(&mut self, f: &mut fmt::Formatter, decl: &CDecl) -> fmt::Result {
         let CDecl { func, args, body } = decl;
-        write!(f,"{func}(")?;
+        write!(f,"{func} ")?;
         let mut first = true;
         for arg in args {
             if first {
                 first = false;
+                write!(f,"{arg}")?;
             } else {
-                write!(f," ")?;
+                write!(f," {arg}")?;
             }
-            write!(f,"{arg}")?;
         }
         write!(f," = ")?;
-        self.print_cexpr(f, body)
+        self.nested(2, |p| {
+            p.newline(f)?;
+            p.print_cexpr(f, body)
+        })
+    }
+
+    pub fn print_tag(&mut self, f: &mut fmt::Formatter, tag: &Tag) -> fmt::Result {
+        match tag {
+            Tag::SubstAtom(_, _) => write!(f,"{tag:?}"),
+            Tag::SubstApp(_) => write!(f,"{tag:?}"),
+            _ => write!(f,"<tag>"),
+        }
     }
 
     pub fn print_cexpr(&mut self, f: &mut fmt::Formatter, expr: &CExpr) -> fmt::Result {
         match expr {
             CExpr::App(func, args) => {
-                self.print_atom(f, func)?;
-                write!(f,"(")?;
+                write!(f,"{func}(")?;
                 let mut first = true;
                 for arg in args {
                     if first {
                         first = false;
+                        write!(f,"{arg}")?;
                     } else {
-                        write!(f," ")?;
+                        write!(f," {arg}")?;
                     }
-                    self.print_atom(f, arg)?;
                 }
                 write!(f,")")
             }
             CExpr::Let(decl, body) => {
                 write!(f,"let ")?;
                 self.print_cdecl(f, decl)?;
-                write!(f," in ")?;
+                write!(f," in")?;
+                self.newline(f)?;
                 self.print_cexpr(f, body)
             }
             CExpr::Fix(decls, body) => {
+                if decls.is_empty() {
+                    write!(f, "let (empty) in ")?;
+                    self.print_cexpr(f, body)?;
+                    write!(f, " end")?;
+                    return Ok(())
+                }
+
                 write!(f, "let")?;
                 self.nested(2, |p| {
                     p.newline(f)?;
@@ -304,17 +310,30 @@ impl Printer {
                 self.newline(f)?;
                 write!(f, "end")
             }
-            CExpr::Uniop(prim, arg1, ret, cont) => {
-                
-
+            CExpr::Uniop(prim, arg, ret, cont) => {
+                write!(f,"{ret} <- {prim} {arg}")?;
+                self.newline(f)?;
+                self.print_cexpr(f, cont.deref())
             }
-            CExpr::Binop(_, _, _, _, _) => todo!(),
+            CExpr::Binop(prim, arg1, arg2, ret, cont) => {
+                write!(f,"{ret} <- {prim} {arg1} {arg2}")?;
+                self.newline(f)?;
+                self.print_cexpr(f, cont.deref())
+            }
             CExpr::Switch(_, _) => todo!(),
             CExpr::Ifte(_, _, _) => todo!(),
             CExpr::Record(_, _, _) => todo!(),
             CExpr::Select(_, _, _, _) => todo!(),
-            CExpr::Halt(_) => todo!(),
-            CExpr::Tag(_, _) => todo!(),
+            CExpr::Halt(arg) => {
+                write!(f,"halt({arg})")
+            }
+            CExpr::Tag(tag, expr) => {
+                write!(f,"tag{{")?;
+                self.print_tag(f, tag)?;
+                write!(f," : ")?;
+                self.print_cexpr(f, expr)?;
+                write!(f,"}}")
+            }
         }
     }
 }

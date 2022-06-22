@@ -245,6 +245,14 @@ impl<'src> Lexer<'src> {
                     Ok((Token::Prim(S_ISUB), Span::new(start, end)))
                 }
             },
+            Some('+') => {
+                let end = self.position();
+                Ok((Token::Prim(S_IADD), Span::new(start, end)))
+            }
+            Some('*') => {
+                let end = self.position();
+                Ok((Token::Prim(S_IMUL), Span::new(start, end)))
+            }
             Some('(') => {
                 let end = self.position();
                 Ok((Token::LParen, Span::new(start, end)))
@@ -285,6 +293,7 @@ impl<'src> Lexer<'src> {
                 let end = self.position();
                 Ok((Token::Wild, Span::new(start, end)))
             }
+            
             Some(x) if x.is_ascii_alphabetic() => {
                 let upper = x.is_uppercase();
 

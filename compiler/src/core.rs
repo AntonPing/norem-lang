@@ -1,9 +1,10 @@
-use lazy_static::__Deref;
-
-use crate::opt::Subst;
+use std::fmt;
 use crate::symbol::*;
 use crate::ast::*;
 use crate::utils::Span;
+
+use crate::visitor::CExprVisitor;
+use crate::opt1::opt_level1;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Atom {
@@ -16,6 +17,23 @@ pub enum Atom {
     Bool(bool),
     Char(char),
 }
+
+impl fmt::Display for Atom {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Atom::Var(x) => write!(f,"{x}"),
+            Atom::Glob(x) => write!(f,"@{x}"),
+            Atom::Reg(x) => write!(f,"reg{x}"),
+            Atom::Prim(x) => write!(f,"{x}"),
+            Atom::Int(x) => write!(f,"{x}"),
+            Atom::Real(x) => write!(f,"{x}"),
+            Atom::Bool(x) => write!(f,"{x}"),
+            Atom::Char(x) => write!(f,"{x}"),
+        }
+    }
+}
+
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CDecl {
@@ -42,10 +60,16 @@ pub enum CExpr {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tag {
     SubstAtom(Symbol, Atom),
+    SubstApp(CDecl),
 }
 
 
 pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
+    if cfg!(test) {
+        println!("In context fn {} => {}", hole, &cont);
+        println!("Eval expresssion {}", expr);
+    }
+
     match expr {
         Expr::Lit(ExprLit { lit, span: _ }) => {
             // literals just fill into the hole
@@ -62,7 +86,7 @@ pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
             let atom = Atom::Var(*ident);
             CExpr::Tag(Tag::SubstAtom(hole,atom),cont)
         }
-        Expr::Prim(ExprPrim { prim, span: _ }) => {
+        Expr::Prim(_) => {
             let app = Expr::App(ExprApp {
                 func: Box::new(expr.clone()),
                 args: Vec::new(),
@@ -73,11 +97,11 @@ pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
             return cps_trans(&app, hole, cont);
         }
         Expr::Lam(ExprLam { args, body, span: _ }) => {
-            let k = genvar('k');
             
             // append an additional argument k to the function
             let funcvar = genvar('f');
             let mut argsvar = Vec::new();
+            let k = genvar('k');
             argsvar.push(k);
             for arg in args {
                 argsvar.push(*arg);
@@ -96,24 +120,23 @@ pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
             }, Box::new(CExpr::Tag(
                 // fill the hole with the function we just defined
                 Tag::SubstAtom(hole,Atom::Var(funcvar)),cont)))
-
         }
 
         Expr::App(ExprApp { func , args, span: _ }) if func.is_prim() => {
-            if let Expr::Prim(ExprPrim { prim, span: _ }) = func.deref() {
+            if let Expr::Prim(ExprPrim { prim, span: _ }) = *func.clone() {
                 let arity = prim.get_arity();
 
-                if arity > args.len() {
-                    panic!("application of a primitive with too much arguments");
+                if arity < args.len() {
+                    panic!("application of a primitive with too much arguments {arity} {}", args.len());
                 }
 
-                if arity < args.len() {
+                if arity > args.len() {
                     // not enough argument, do the eta-expansion!
                     // for example (f x y z) becames (fn u v => (f x y z u v))
                     let mut args = args.clone();
                     let mut newargs = Vec::new();
 
-                    for _ in 0..args.len() - arity {
+                    for _ in 0..arity - args.len() {
                         let var = genvar('x');
                         newargs.push(var);
                         args.push(Expr::Var(ExprVar {
@@ -139,17 +162,11 @@ pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
                 }
 
                 // otherwise, in the case arity == args.len()
-
-                // generate new variable "r" and fill the hole
-                let ret = genvar('r');
-                let cont = Box::new(CExpr::Tag(
-                    Tag::SubstAtom(hole, Atom::Var(ret)), cont));
-
                 match arity {
                     1 => {
                         // name the argument "x"
                         let x = genvar('x');
-                        let result = CExpr::Uniop(*prim, Atom::Var(x), ret, cont);
+                        let result = CExpr::Uniop(prim, Atom::Var(x), hole, cont);
                         
                         // eval the argument to fill the "x" hole
                         let result = cps_trans(&args[0], x, Box::new(result));
@@ -159,7 +176,7 @@ pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
                         // name the argument "x"
                         let x1 = genvar('x');
                         let x2 = genvar('x');
-                        let result = CExpr::Binop(*prim, Atom::Var(x1), Atom::Var(x2), ret, cont);
+                        let result = CExpr::Binop(prim, Atom::Var(x1), Atom::Var(x2), hole, cont);
                         
                         // eval the argument to fill the "x" hole
                         let result = cps_trans(&args[0], x1, Box::new(result));
@@ -176,6 +193,14 @@ pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
             }
         }
         Expr::App(ExprApp { func, args, span: _ }) => {
+            // sometimes people write unecessary parens like (x)
+            // in such case we treat it as x
+            if args.len() == 0 {
+                return cps_trans(func, hole, cont);
+            }
+
+            
+            
             // transform the return continuation into a function declaration
             let def = {
                 let func = genvar('r');
@@ -188,17 +213,21 @@ pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
             // generate a bunch of fresh variable
             let funcvar = genvar('f');
             let mut argsvar = Vec::new();
+            argsvar.push(def.func);
             for _ in args {
                 argsvar.push(genvar('x'));
             }
-            argsvar.push(def.func);
 
-            // make "f(x1,x2,...,xn,r)"
+            
+            
+            // make "f(r,x1,x2,...,xn)"
             let mut result = CExpr::App(
                 Atom::Var(funcvar),
                 argsvar.iter()
                     .map(|x| Atom::Var(*x)).collect()
             );
+
+            println!("argslen = {}, {result}", args.len());
 
             /* 
                 eval the function and arguments to fill the correspoding
@@ -206,7 +235,9 @@ pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
             */
             result = cps_trans(func, funcvar, Box::new(result));
             for (i,arg) in args.iter().enumerate() {
-                result = cps_trans(arg, argsvar[i], Box::new(result));
+                println!("eval {i} {arg}");
+                // the original i-th argument became (i+1)-th now
+                result = cps_trans(arg, argsvar[i+1], Box::new(result));
             }
 
             CExpr::Let(def,Box::new(result))
@@ -251,29 +282,27 @@ pub fn cps_trans_top(expr: &Expr) -> CExpr {
         CExpr::Halt(Atom::Var(temp))))
 }
 
+
 #[test]
 fn cps_trans_test() {
     use crate::parser::*;
     let string = "
-        let
-            val a = 42
-            val b = 11
-        in
-            fn f g x => ((f x) (g x)) 
-        end
+        (fn x => + x 1) 42
     ";
     let mut par = Parser::new(string);
-    par.next().unwrap();
 
-
-    let res = parse_expr(&mut par);
+    let res = parse_program(&mut par);
     if let Ok(res) = res {
-        println!("{res}");
+        println!("\n{res}");
         let cexpr = cps_trans_top(&res);
-        println!("{:#?}", cexpr);
-        let mut subst = Subst::new();
-        let cexpr = subst.run(cexpr);
-        println!("{:#?}", cexpr);
+        println!("\n{}", cexpr);
+
+        let mut reduce = crate::opt1::Opt1Reduce::new();
+        let cexpr = reduce.walk_cexpr(cexpr);
+        println!("\n{}", cexpr);
+
+        let cexpr = opt_level1(cexpr);
+        println!("\n{}", cexpr);
     } else {
         par.print_err();
     }

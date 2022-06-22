@@ -23,8 +23,8 @@ pub trait CExprVisitor {
         }
     }
 
-    fn visit_cdecl(&mut self, def: CDecl) -> CDecl {
-        let CDecl { func, args, body } = def;
+    fn visit_cdecl(&mut self, decl: CDecl) -> CDecl {
+        let CDecl { func, args, body } = decl;
         let args = args.iter()
             .map(|arg| self.visit_var_def(*arg)).collect();
         let body = Box::new(self.walk_cexpr(*body));
@@ -39,13 +39,13 @@ pub trait CExprVisitor {
         )
     }
 
-    fn visit_let(&mut self, def: CDecl, cont: Box<CExpr>) -> CExpr {
-        CExpr::Let(self.visit_cdecl(def), Box::new(self.walk_cexpr(*cont)))
+    fn visit_let(&mut self, decl: CDecl, cont: Box<CExpr>) -> CExpr {
+        CExpr::Let(self.visit_cdecl(decl), Box::new(self.walk_cexpr(*cont)))
     }
 
-    fn visit_fix(&mut self, defs: Vec<CDecl>, cont: Box<CExpr>) -> CExpr {
+    fn visit_fix(&mut self, decls: Vec<CDecl>, cont: Box<CExpr>) -> CExpr {
         CExpr::Fix(
-            defs.into_iter().map(|def| self.visit_cdecl(def)).collect(),
+            decls.into_iter().map(|def| self.visit_cdecl(def)).collect(),
             Box::new(self.walk_cexpr(*cont)),
         )
     }

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Mutex;
 
-use crate::ast::Prim;
+use crate::ast::{Prim, LitType};
 
 lazy_static::lazy_static! {
     static ref GLOB_TABLE: Mutex<SymbTable> = {
@@ -72,6 +72,7 @@ impl SymbTable {
     pub fn gensym(&mut self, ch: char) -> Symbol {
         let old = self.gensym_idx;
         self.gensym_idx += 1;
+        println!("{ch}{old} generated!");
         Symbol::Gen(ch, old)
     }
 
@@ -112,7 +113,7 @@ impl fmt::Display for Symbol {
                 write!(f, "{}_{n}", table.get_idx(x).unwrap())
             }
             &Symbol::Gen(ch, n) => {
-                write!(f, "#{}_{}", ch, n)
+                write!(f, "{}{}", ch, n)
             }
             &Symbol::Str(n) => {
                 write!(f, "{}", table.get_str(n).unwrap())
@@ -176,28 +177,33 @@ const BUILTIN: [&'static str; S_TOTAL_GLOBALS] = [
     "!",
 ];
 
-
-
 impl Symbol {
-    pub fn as_buildin(&self) -> Option<usize> {
+    pub fn is_buildin(&self) -> bool {
         if let Symbol::BuiltIn(n) = self {
-            Some(*n)
+            true
         } else {
-            None
+            false
         }
     }
     pub fn to_prim(&self) -> Prim {
-        if let Some(id) = self.as_buildin() {
-            match id {
-                ADD_ID => Prim::IAdd,
-                SUB_ID => Prim::ISub,
-                MUL_ID => Prim::IMul,
-                DIV_ID => Prim::IDiv,
-                NEG_ID => Prim::INeg,
-                NOT_ID => Prim::BNot,
-            }
-        } else {
-            panic!("should be a built-in!");
+        match *self {
+            S_IADD => Prim::IAdd,
+            S_ISUB => Prim::ISub,
+            S_IMUL => Prim::IMul,
+            S_IDIV => Prim::IDiv,
+            S_INEG => Prim::INeg,
+            S_BNOT => Prim::BNot,
+            _ => { panic!("can't convert primitive!"); }
+        }
+    }
+
+    pub fn to_lit_type(&self) -> LitType {
+        match *self {
+            S_TY_INT => LitType::Int,
+            S_TY_REAL => LitType::Real,
+            S_TY_BOOL => LitType::Bool,
+            S_TY_CHAR => LitType::Char,
+            _ => { panic!("can't convert LitType!"); }
         }
     }
 }
