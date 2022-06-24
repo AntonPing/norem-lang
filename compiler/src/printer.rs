@@ -3,7 +3,7 @@ use std::fmt;
 use lazy_static::__Deref;
 
 use crate::ast::*;
-use crate::core::*;
+use crate::backend::core::*;
 use crate::symbol::*;
 
 impl fmt::Display for Expr {
@@ -58,6 +58,32 @@ impl Printer {
         Ok(())
     }
 
+    pub fn indent(&mut self, len: usize) {
+        self.indent += len;
+    }
+
+    pub fn indent_newline<W: fmt::Write>(
+        &mut self,
+        f: &mut W,
+        len: usize
+    ) -> fmt::Result {
+        self.indent += len;
+        self.newline(f)
+    }
+
+    pub fn dedent(&mut self, len: usize) {
+        self.indent -= len;
+    }
+
+    pub fn dedent_newline<W: fmt::Write>(
+        &mut self,
+        f: &mut W,
+        len: usize
+    ) -> fmt::Result {
+        self.indent -= len;
+        self.newline(f)
+    }
+
     pub fn nested<F>(&mut self, indent: usize, func: F) -> fmt::Result
     where
         F: FnOnce(&mut Printer) -> fmt::Result,
@@ -88,7 +114,7 @@ impl Printer {
     pub fn print_decl(&mut self, f: &mut fmt::Formatter, decl: &Decl) -> fmt::Result {
         match decl {
             Decl::Val(decl) => {
-                let DeclVal { name, args, body, span: _ } = decl;
+                let DeclVal { name, args, body, span: _ } = &decl;
                 write!(f, "val {name}")?;
                 for arg in args {
                     write!(f, " {arg}")?;
@@ -97,7 +123,7 @@ impl Printer {
                 self.print_expr(f, body)
             }
             Decl::Data(decl) => {
-                let DeclData { name, args, vars, span: _ } = decl;
+                let DeclData { name, args, vars, span: _ } = &decl;
                 write!(f, "data {name}")?;
                 for arg in args {
                     write!(f, " {arg}")?;
@@ -116,12 +142,7 @@ impl Printer {
                 Ok(())
             }
             Decl::Type(decl) => {
-                let DeclType {
-                    name,
-                    args,
-                    typ,
-                    span: _,
-                } = decl;
+                let DeclType { name, args, typ, span: _ } = &decl;
                 write!(f, "type {name}")?;
                 for arg in args {
                     write!(f, " {arg}")?;
@@ -132,79 +153,75 @@ impl Printer {
         }
     }
 
+    pub fn print_expr_outer(&mut self, f: &mut fmt::Formatter, expr: &Expr) -> fmt::Result {
+        if let Expr::App(expr) = expr {
+            self.print_expr(f, &expr.func)?;
+            for arg in &expr.args {
+                write!(f, " ")?;
+                self.print_expr(f, arg)?;
+            }
+            Ok(())
+        } else {
+            self.print_expr(f, expr)
+        }
+    }
+
     pub fn print_expr(&mut self, f: &mut fmt::Formatter, expr: &Expr) -> fmt::Result {
         match expr {
-            Expr::Lit(lit) => {
-                let ExprLit { lit, span: _ } = lit;
-                self.print_lit_val(f, lit)
+            Expr::Lit(expr) => {
+                self.print_lit_val(f, &expr.lit)
             }
-            Expr::Prim(prim) => {
-                let ExprPrim { prim, span: _ } = prim;
-                write!(f, "{prim:?}")
+            Expr::Prim(expr) => {
+                write!(f, "{}", &expr.prim)
             }
             Expr::Var(expr) => {
-                let ExprVar { ident, span: _ } = expr;
-                write!(f, "{ident}")
+                write!(f, "{}", &expr.ident)
             }
             Expr::Lam(expr) => {
-                let ExprLam { args, body, span: _ } = expr;
                 write!(f, "fn")?;
-                for arg in args {
+                for arg in &expr.args {
                     write!(f, " {arg}")?;
                 }
                 write!(f, " => ")?;
-                self.nested(2, |p| {
-                    p.newline(f)?;
-                    p.print_expr(f, body)
-                })
+                self.indent_newline(f, 2)?;
+                self.print_expr(f, &expr.body)?;
+                self.dedent(2);
+                Ok(())
             }
             Expr::App(expr) => {
-                let ExprApp { func, args, span: _ } = expr;
                 write!(f, "(")?;
-                self.print_expr(f, func)?;
-                for arg in args {
+                self.print_expr(f, &expr.func)?;
+                for arg in &expr.args {
                     write!(f, " ")?;
                     self.print_expr(f, arg)?;
                 }
                 write!(f, ")")
             }
             Expr::Let(expr) => {
-                let ExprLet { decls, body, span: _ } = expr;
                 write!(f, "let")?;
-                self.nested(2, |p| {
-                    p.newline(f)?;
-                    let last = decls.len() - 1;
-                    for decl in &decls[0..last] {
-                        p.print_decl(f, decl)?;
-                        p.newline(f)?;
-                    }
-                    p.print_decl(f, &decls[last])?;
-                    Ok(())
-                })?;
-                self.newline(f)?;
+                self.indent(2);
+                for decl in &expr.decls {
+                    self.newline(f)?;
+                    self.print_decl(f, decl)?; 
+                }
+                self.dedent_newline(f, 2)?;
                 write!(f, "in")?;
-                self.nested(2, |p| {
-                    p.newline(f)?;
-                    p.print_expr(f, body)
-                })?;
-                self.newline(f)?;
+                self.indent_newline(f, 2)?;
+                self.print_expr(f, &expr.body)?;
+                self.dedent_newline(f, 2)?;
                 write!(f, "end")
             }
             Expr::Case(expr) => {
-                let ExprCase { expr, rules, span: _ } = expr;
                 write!(f, "case ")?;
-                self.print_expr(f, expr)?;
+                self.print_expr(f, &expr.expr)?;
                 write!(f, " of")?;
-                self.nested(2, |p| {
-                    p.newline(f)?;
-                    let last = rules.len() - 1;
-                    for rule in &rules[0..last] {
-                        p.print_rule(f, rule)?;
-                        p.newline(f)?;
-                    }
-                    p.print_rule(f, &rules[last])?;
-                    Ok(())
-                })
+                self.indent(2);
+                for rule in &expr.rules {
+                    self.newline(f)?;
+                    self.print_rule(f, rule)?;
+                }
+                self.dedent_newline(f, 2)?;
+                write!(f, "end")
             }
         }
     }
@@ -235,21 +252,15 @@ impl Printer {
 
     pub fn print_cdecl(&mut self, f: &mut fmt::Formatter, decl: &CDecl) -> fmt::Result {
         let CDecl { func, args, body } = decl;
-        write!(f,"{func} ")?;
-        let mut first = true;
+        write!(f,"{func}")?;
+
         for arg in args {
-            if first {
-                first = false;
-                write!(f,"{arg}")?;
-            } else {
-                write!(f," {arg}")?;
-            }
+            write!(f," {arg}")?;
         }
         write!(f," = ")?;
-        self.nested(2, |p| {
-            p.newline(f)?;
-            p.print_cexpr(f, body)
-        })
+        self.indent_newline(f, 2)?;
+        self.print_cexpr(f, body)?;
+        write!(f, ";")
     }
 
     pub fn print_tag(&mut self, f: &mut fmt::Formatter, tag: &Tag) -> fmt::Result {
@@ -264,12 +275,9 @@ impl Printer {
         match expr {
             CExpr::App(func, args) => {
                 write!(f,"{func}(")?;
-                let mut first = true;
-                for arg in args {
-                    if first {
-                        first = false;
-                        write!(f,"{arg}")?;
-                    } else {
+                if !args.is_empty() {
+                    write!(f,"{}", &args[0])?;
+                    for arg in &args[1..] {
                         write!(f," {arg}")?;
                     }
                 }
@@ -291,39 +299,63 @@ impl Printer {
                 }
 
                 write!(f, "let")?;
-                self.nested(2, |p| {
-                    p.newline(f)?;
-                    let last = decls.len() - 1;
-                    for decl in &decls[0..last] {
-                        p.print_cdecl(f, decl)?;
-                        p.newline(f)?;
-                    }
-                    p.print_cdecl(f, &decls[last])?;
-                    Ok(())
-                })?;
-                self.newline(f)?;
+                self.indent(2);
+
+                for decl in decls {
+                    self.newline(f)?;
+                    self.print_cdecl(f, decl)?;
+                }
+                self.dedent_newline(f, 2)?;
                 write!(f, "in")?;
-                self.nested(2, |p| {
-                    p.newline(f)?;
-                    p.print_cexpr(f, body)
-                })?;
-                self.newline(f)?;
+                self.indent_newline(f, 2);
+                self.print_cexpr(f, body)?;
+                self.dedent_newline(f, 2)?;
                 write!(f, "end")
             }
             CExpr::Uniop(prim, arg, ret, cont) => {
-                write!(f,"{ret} <- {prim} {arg}")?;
+                write!(f,"{prim} {arg} -> {ret}")?;
                 self.newline(f)?;
                 self.print_cexpr(f, cont.deref())
             }
             CExpr::Binop(prim, arg1, arg2, ret, cont) => {
-                write!(f,"{ret} <- {prim} {arg1} {arg2}")?;
+                write!(f,"{prim} {arg1} {arg2} -> {ret}")?;
                 self.newline(f)?;
                 self.print_cexpr(f, cont.deref())
             }
-            CExpr::Switch(_, _) => todo!(),
-            CExpr::Ifte(_, _, _) => todo!(),
-            CExpr::Record(_, _, _) => todo!(),
-            CExpr::Select(_, _, _, _) => todo!(),
+            CExpr::Switch(n, conts) => {
+                write!(f,"switch {n}")?;
+                self.indent(2);
+                for cont in conts {
+                    self.newline(f)?;
+                    write!(f,"| ")?;
+                    self.print_cexpr(f, cont)?;
+                }
+                self.dedent_newline(f, 2);
+                write!(f, "end")
+            }
+            CExpr::Ifte(cond, trbr, flbr) => {
+                write!(f,"if {cond}")?;
+                self.newline(f)?;
+                write!(f,"then ")?;
+                self.print_cexpr(f, trbr)?;
+                self.newline(f)?;
+                write!(f,"else ")?;
+                self.print_cexpr(f, flbr)
+            }
+            CExpr::Record(xs, ret, cont) => {
+                write!(f,"{{")?;
+                for x in xs {
+                    write!(f, " {x}")?;
+                }
+                write!(f," }} -> {ret}")?;
+                self.newline(f)?;
+                self.print_cexpr(f, cont)
+            }
+            CExpr::Select(n, rec, ret, cont) => {
+                write!(f,"select {n} of {rec} -> {ret}")?;
+                self.newline(f)?;
+                self.print_cexpr(f, cont)
+            }
             CExpr::Halt(arg) => {
                 write!(f,"halt({arg})")
             }

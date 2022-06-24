@@ -4,13 +4,12 @@ pub mod parser;
 pub mod printer;
 pub mod symbol;
 pub mod utils;
-//pub mod checker;
+pub mod check;
 
 
-pub mod core;
-pub mod visitor;
-//pub mod opt;
-pub mod opt1;
+pub mod backend;
+
+
 
 fn main() {
     println!("Hello, world!");

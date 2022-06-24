@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use crate::ast::*;
-use crate::core::*;
 use crate::symbol::*;
 use crate::utils::Span;
+
+use super::core::*;
 
 pub trait CExprVisitor {
 

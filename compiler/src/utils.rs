@@ -70,8 +70,8 @@ where
         }
     }
 
-    pub fn remove_all(&mut self, elem: &T) {
-        self.0.remove(elem);
+    pub fn remove_all(&mut self, elem: &T) -> usize {
+        self.0.remove(elem).unwrap_or(0)
     }
 
     pub fn get(&self, value: &T) -> usize {

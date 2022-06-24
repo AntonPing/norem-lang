@@ -1,5 +1,4 @@
 use std::fmt;
-use std::fmt::write;
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -177,6 +176,7 @@ impl<'src> Lexer<'src> {
                     _ => {}
                 },
                 1 => match ch {
+                    '*' => state = 1,
                     '/' => {
                         level -= 1;
                         state = 0
@@ -188,6 +188,7 @@ impl<'src> Lexer<'src> {
                         level += 1;
                         state = 0
                     }
+                    '/' => state = 2,
                     _ => state = 0,
                 },
                 _ => {

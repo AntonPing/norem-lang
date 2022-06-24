@@ -2,9 +2,11 @@ use std::collections::HashMap;
 
 use crate::ast::Prim;
 use crate::symbol::{Symbol, newvar, genvar};
-use crate::core::*;
+
 use crate::utils::MultiSet;
-use crate::visitor::*;
+
+use super::core::*;
+use super::visitor::*;
 
 /*
     level one optimizer:
@@ -72,7 +74,7 @@ impl CExprVisitor for Opt1Scan {
         let decl = self.visit_cdecl(decl);
         let cont = self.walk_cexpr(*cont);
 
-        match self.count.get(&decl.func) {
+        match self.count.remove_all(&decl.func) {
             0 => {
                 // dead code elimination
                 self.change = true;

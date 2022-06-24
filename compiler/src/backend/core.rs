@@ -3,8 +3,8 @@ use crate::symbol::*;
 use crate::ast::*;
 use crate::utils::Span;
 
-use crate::visitor::CExprVisitor;
-use crate::opt1::opt_level1;
+use super::visitor::CExprVisitor;
+use super::opt1::opt_level1;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Atom {
@@ -217,8 +217,6 @@ pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
             for _ in args {
                 argsvar.push(genvar('x'));
             }
-
-            
             
             // make "f(r,x1,x2,...,xn)"
             let mut result = CExpr::App(
@@ -297,7 +295,7 @@ fn cps_trans_test() {
         let cexpr = cps_trans_top(&res);
         println!("\n{}", cexpr);
 
-        let mut reduce = crate::opt1::Opt1Reduce::new();
+        let mut reduce = super::opt1::Opt1Reduce::new();
         let cexpr = reduce.walk_cexpr(cexpr);
         println!("\n{}", cexpr);
 
