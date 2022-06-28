@@ -1,10 +1,4 @@
-use std::collections::HashMap;
-
-use crate::ast::*;
-use crate::symbol::*;
-use crate::utils::Span;
-
-use super::core::*;
+use crate::backend::*;
 
 pub trait CExprVisitor {
 
@@ -113,7 +107,7 @@ pub trait CExprVisitor {
     }
 
     fn visit_tag(&mut self, tag: Tag, cont: Box<CExpr>) -> CExpr {
-        CExpr::Tag(tag, cont)
+        CExpr::Tag(tag, Box::new(self.walk_cexpr(*cont)))
     }
 
     fn walk_cexpr(&mut self, expr: CExpr) -> CExpr {

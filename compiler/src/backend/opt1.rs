@@ -1,12 +1,8 @@
 use std::collections::HashMap;
-
-use crate::ast::Prim;
-use crate::symbol::{Symbol, newvar, genvar};
-
+use crate::backend::*;
+use super::visitor::*;
 use crate::utils::MultiSet;
 
-use super::core::*;
-use super::visitor::*;
 
 /*
     level one optimizer:
@@ -16,35 +12,16 @@ use super::visitor::*;
 */
 pub struct Opt1Scan {
     change: bool,
-    count: MultiSet<Symbol>,
+    ref_count: MultiSet<Symbol>,
+    call_count: MultiSet<Symbol>,
 }
 
 impl Opt1Scan {
-    pub fn run_opt1_scan(expr: CExpr) -> (CExpr,bool) {
-        let mut scan = Opt1Scan::new();
-        let expr = scan.walk_cexpr(expr);
-        (expr, scan.change)
-    }
-
-    pub fn run_opt1_scan_loop(expr: CExpr) -> (CExpr,usize) {
-        let mut times: usize = 0;
-        let mut expr = expr;
-
-        loop {
-            let (new_expr,p) = Opt1Scan::run_opt1_scan(expr);
-            if p {
-                times += 1;
-                expr = new_expr;
-            } else {
-                return (new_expr,times);
-            }
-        }
-    }
-
     pub fn new() -> Opt1Scan {
         Opt1Scan {
             change: false,
-            count: MultiSet::new(),
+            ref_count: MultiSet::new(),
+            call_count: MultiSet::new(),
         }
     }
 }
@@ -52,11 +29,13 @@ impl Opt1Scan {
 impl CExprVisitor for Opt1Scan {
     fn visit_app(&mut self, func: Atom, args: Vec<Atom>) -> CExpr {
         if let Atom::Var(sym) = &func {
-            self.count.insert(*sym);
+            self.ref_count.insert(*sym);
+            self.call_count.insert(*sym);
         }
         for arg in &args {
             if let Atom::Var(sym) = arg {
-                self.count.insert(*sym);
+                self.ref_count.insert(*sym);
+                //println!("arg insert {}",sym);
             }
         }
         CExpr::App(func, args)
@@ -64,31 +43,32 @@ impl CExprVisitor for Opt1Scan {
 
     fn visit_halt(&mut self, arg: Atom) -> CExpr {
         if let Atom::Var(sym) = &arg {
-            self.count.insert(*sym);
+            self.ref_count.insert(*sym);
         }
         CExpr::Halt(arg)
     }
 
 
     fn visit_let(&mut self, decl: CDecl, cont: Box<CExpr>) -> CExpr {
-        let decl = self.visit_cdecl(decl);
         let cont = self.walk_cexpr(*cont);
 
-        match self.count.remove_all(&decl.func) {
-            0 => {
-                // dead code elimination
-                self.change = true;
-                cont
-            }
-            1 => {
-                // safe beta inlining
-                self.change = true;
-                CExpr::Tag(Tag::SubstApp(decl),Box::new(cont))
-            }
-            _ => {
-                // do nothing
-                CExpr::Let(decl, Box::new(cont))
-            }
+        if self.ref_count.remove_all(&decl.func) == 0 {
+            // dead code elimination
+            assert_eq!(self.call_count.remove_all(&decl.func),0);
+            self.change = true;
+            return cont;
+        }
+
+        let count = self.call_count.remove_all(&decl.func);
+        let decl = self.visit_cdecl(decl);
+        if count == 1 /*|| count * cont.size() < 1*/ {
+            // safe beta inlining
+            self.change = true;
+            CExpr::Let(decl.clone(), Box::new(
+                CExpr::Tag(Tag::SubstApp(decl),Box::new(cont))))
+        } else {
+            // do nothing
+            CExpr::Let(decl, Box::new(cont))
         }
     }
 
@@ -109,7 +89,7 @@ impl CExprVisitor for Opt1Scan {
         let mut newdecls = Vec::new();
 
         for decl in decls {
-            match self.count.get(&decl.func) {
+            match self.ref_count.get(&decl.func) {
                 0 => {
                     // dead code elimination
                     self.change = true;
@@ -134,6 +114,7 @@ impl CExprVisitor for Opt1Scan {
         ret: Symbol,
         cont: Box<CExpr>
     ) -> CExpr {
+        let cont = Box::new(self.walk_cexpr(*cont));
         match (prim, arg) {
             (Prim::INeg, Atom::Int(x)) => {
                 self.change = true;
@@ -157,6 +138,7 @@ impl CExprVisitor for Opt1Scan {
         ret: Symbol,
         cont: Box<CExpr>,
     ) -> CExpr {
+        let cont = Box::new(self.walk_cexpr(*cont));
         match (prim, arg1, arg2) {
             (Prim::IAdd, Atom::Int(x), Atom::Int(y)) => {
                 self.change = true;
@@ -278,13 +260,19 @@ impl CExprVisitor for Opt1Reduce {
 
 pub fn opt_level1(expr: CExpr) -> CExpr {
     let mut expr = expr;
-
+    let mut n = 0;
+    
     loop {
-        let (new_expr, times) = Opt1Scan::run_opt1_scan_loop(expr);
-        if times == 0 {
-            return new_expr;
+        n += 1;
+        let mut scan = Opt1Scan::new();
+        expr = scan.walk_cexpr(expr);
+        if scan.change {
+            let mut reduce = Opt1Reduce::new();
+            expr = reduce.walk_cexpr(expr);
+            println!("\n{n}:\n{}", expr);
         } else {
-            expr = Opt1Reduce::run_opt1_reduce(new_expr);
+            println!("\n{n}:\n{}", expr);
+            return expr;
         }
     }
 }
@@ -293,20 +281,22 @@ pub fn opt_level1(expr: CExpr) -> CExpr {
 #[test]
 fn opt_test() {
     use crate::parser::*;
+    /*
     let string = "
         (fn x y => (* (+ x 1) (- y 2))) 3 4
+    ";
+    */
+
+    let string = "
+        (fn f g x => ((f x) (g x))) + (fn x => x) 5
     ";
     let mut par = Parser::new(string);
 
     let res = parse_program(&mut par);
     if let Ok(res) = res {
         println!("\n{res}");
-        let cexpr = cps_trans_top(&res);
-        println!("\n{}", cexpr);
-
-        let mut reduce = Opt1Reduce::new();
-        let cexpr = reduce.walk_cexpr(cexpr);
-        println!("\n{}", cexpr);
+        let cexpr = cps::cps_trans_top(&res);
+        //println!("\n{}", cexpr);
 
         let cexpr = opt_level1(cexpr);
         println!("\n{}", cexpr);

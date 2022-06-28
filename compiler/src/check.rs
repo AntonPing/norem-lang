@@ -9,6 +9,7 @@ pub struct Checker {
     type_env: MultiSet<Symbol>,
     thrown: bool,
     error: Vec<CheckError>,
+
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -37,33 +38,40 @@ impl Checker {
         }
     }
 
+    pub fn catch_start(&mut self) -> bool {
+        let old = self.thrown;
+        self.thrown = false;
+        old
+    }
+
+    pub fn catch_finish(&mut self, old: bool, err: CheckError) {
+        if self.thrown {
+            // keeps self.thrown = true;
+            self.error.push(err);
+        } else {
+            self.thrown = old;
+        }
+    }
+
     pub fn throw_err(&mut self, err: CheckError) {
         self.thrown = true;
         self.error.push(err);
     }
 
-    pub fn append_err(&mut self, err: CheckError) {
-        if self.thrown {
-            self.error.push(err);
-        }
-    }
-
-    pub fn cut_err(&mut self, err: CheckError) {
-        if self.thrown {
-            self.thrown = false;
-            self.error.push(err);
-        }
-    }
-
     pub fn check_expr_var(&mut self, expr: &ExprVar) {
+        let old = self.catch_start();
+
         if !self.val_env.contains(&expr.ident) {
             self.throw_err(CheckError::ValNotBound(expr.ident));
         }
 
-        self.append_err(CheckError::ErrorIn(expr.span, "Variable"));
+        self.catch_finish(old,
+            CheckError::ErrorIn(expr.span, "Variable"));
     }
 
     pub fn check_expr_lam(&mut self, expr: &ExprLam) {
+        let old = self.catch_start();
+
         for arg in &expr.args {
             self.val_env.insert(*arg);
         }
@@ -74,20 +82,26 @@ impl Checker {
             self.val_env.remove(arg);
         }
 
-        self.append_err(CheckError::ErrorIn(expr.span, "Lambda"));
+        self.catch_finish(old,
+            CheckError::ErrorIn(expr.span, "Lambda"));
     }
 
     pub fn check_expr_app(&mut self, expr: &ExprApp) {
+        let old = self.catch_start();
+
         self.check_expr(&*expr.func);
 
         for arg in &expr.args {
             self.check_expr(arg);
         }
 
-        self.append_err(CheckError::ErrorIn(expr.span, "Application"));
+        self.catch_finish(old,
+            CheckError::ErrorIn(expr.span, "Application"));
     }
 
     pub fn check_expr_let(&mut self, expr: &ExprLet) {
+        let old = self.catch_start();
+
         for decl in &expr.decls {
             self.enter_decl(decl);
         }
@@ -97,7 +111,8 @@ impl Checker {
             self.leave_decl(decl);
         }
 
-        self.append_err(CheckError::ErrorIn(expr.span, "Let-Block"));
+        self.catch_finish(old,
+            CheckError::ErrorIn(expr.span, "Let-Block"));
     }
 
     pub fn enter_decl(&mut self, decl: &Decl) {
@@ -142,6 +157,7 @@ impl Checker {
     }
 
     pub fn enter_val_decl(&mut self, decl: &DeclVal) {
+        let old = self.catch_start();
         
         self.val_env.insert(decl.name);
         self.check_unique(&decl.args);
@@ -154,7 +170,8 @@ impl Checker {
             self.type_env.remove(arg);
         }
 
-        self.cut_err(CheckError::ErrorIn(decl.span, "Value Decl"));
+        self.catch_finish(old,
+            CheckError::ErrorIn(decl.span, "Value Decl"));
     }
 
     pub fn leave_val_decl(&mut self, decl: &DeclVal) {
@@ -162,7 +179,8 @@ impl Checker {
     }
 
     pub fn enter_data_decl(&mut self, decl: &DeclData) {
-        
+        let old = self.catch_start();
+
         self.type_env.insert(decl.name);
         self.check_unique(&decl.args);
 
@@ -178,7 +196,8 @@ impl Checker {
             self.type_env.remove(arg);
         }
 
-        self.cut_err(CheckError::ErrorIn(decl.span, "Data Decl"));
+        self.catch_finish(old,
+            CheckError::ErrorIn(decl.span, "Data Decl"));
     }
 
     pub fn leave_data_decl(&mut self, decl: &DeclData) {
@@ -190,13 +209,16 @@ impl Checker {
     }
 
     pub fn enter_varient(&mut self, var: &Variant) {
+        let old = self.catch_start();
+
         self.cons_env.insert(var.cons);
 
         for arg in &var.args {
             self.check_type(arg);
         }
 
-        self.append_err(CheckError::ErrorIn(var.span, "Varient"));
+        self.catch_finish(old,
+            CheckError::ErrorIn(var.span, "Varient"));
     }
 
     pub fn leave_varient(&mut self, var: &Variant) {
@@ -241,6 +263,7 @@ impl Checker {
     }
     
     pub fn enter_type_decl(&mut self, decl: &DeclType) {
+        let old = self.catch_start();
         
         self.type_env.insert(decl.name);
         self.check_unique(&decl.args);
@@ -253,7 +276,8 @@ impl Checker {
             self.type_env.remove(arg);
         }
 
-        self.cut_err(CheckError::ErrorIn(decl.span, "Type Decl"));
+        self.catch_finish(old,
+            CheckError::ErrorIn(decl.span, "Type Decl"));
     }
 
     pub fn leave_type_decl(&mut self, decl: &DeclType) {
@@ -348,50 +372,9 @@ fn check_test() {
     if let Ok(res) = res {
         let mut chk = Checker::new();
         chk.check_expr(&res);
-
-
         println!("{:#?}",chk.error);
     } else {
         par.print_err();
     }
     
 }
-
-
-/*
-impl ExprVisitor for Checker {
-    fn visit_var(&mut self, expr: ExprVar) -> ExprVar {
-        let ExprVar { ident, span } = expr;
-        if !self.val_env.contains(&ident) {
-            self.error_throw(CheckError::ValNotBound(ident));
-        }
-        self.error_catch(CheckError::ErrorIn("ExprVar", span));
-        ExprVar { ident, span }
-    }
-
-    fn visit_lam(&mut self, expr: ExprLam) -> ExprLam {
-        let ExprLam { args, body, span } = expr;
-        if let Some(sym) = check_unique(&args) {
-            self.error_throw(CheckError::FuncArgsNotUnique(sym));
-        }
-        for arg in &args {
-            self.val_env.insert(*arg);
-        }
-        let body = Box::new(self.walk_expr(*body));
-        for arg in &args {
-            self.val_env.remove(arg);
-        }
-        self.error_catch(CheckError::ErrorIn("ExprLam", span));
-        ExprLam { args, body, span }
-    }
-
-    fn visit_app(&mut self, expr: ExprApp) -> ExprApp {
-        let ExprApp { func, args, span } = expr;
-        let func = Box::new(self.walk_expr(*func));
-        let args = args.into_iter().map(|arg| self.walk_expr(arg)).collect();
-
-        self.error_catch(CheckError::ErrorIn("ExprApp", span));
-        ExprApp { func, args, span }
-    }
-}
-*/

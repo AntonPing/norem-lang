@@ -1,10 +1,5 @@
-use std::collections::{HashMap, HashSet};
-
-use crate::ast::Prim;
-use crate::symbol::{Symbol, newvar, genvar};
-use crate::utils::MultiSet;
-
-use super::core::*;
+use std::collections::HashSet;
+use crate::backend::*;
 use super::visitor::*;
 
 /*
@@ -28,8 +23,15 @@ impl ClosConv {
 }
 
 impl CExprVisitor for ClosConv {
+    /*  
+        f(a,b,...,z) 
+        
+        ======> becomes =======>
+        
+        select f -> f';
+        f'(f,a,b,...,z)
+    */
     fn visit_app(&mut self, func: Atom, mut args: Vec<Atom>) -> CExpr {
-
         if let Atom::Var(sym) = &func {
             self.freevars.insert(*sym);
         }
@@ -38,8 +40,6 @@ impl CExprVisitor for ClosConv {
                 self.freevars.insert(*sym);
             }
         }
-
-        // f(a,b,...,z) => select f -> f'; f'(f,a,b,...,z)
         let func2 = genvar('c');
         args.insert(0, func);
         CExpr::Select(0, func, func2, Box::new(
@@ -54,11 +54,30 @@ impl CExprVisitor for ClosConv {
         CExpr::Halt(arg)
     }
 
+    /*
+        let foo(x,y,...,z) =
+            bar; in
+        baz
 
+        =======> becomes =======>
+
+        let foo(c,x,y,...,z) = 
+            select 0 c -> v1;
+            ...
+            select n c -> vn;
+            bar; in
+        record { foo, v1, ..., vn } -> foo;
+        baz
+    */
     fn visit_let(&mut self, decl: CDecl, cont: Box<CExpr>) -> CExpr {
+        
         let mut decl = self.visit_cdecl(decl);
         for arg in &decl.args {
             self.freevars.remove(arg);
+        }
+
+        for var in &self.freevars {
+            println!("free {var}");
         }
 
         let clos = genvar('c');
@@ -70,15 +89,19 @@ impl CExprVisitor for ClosConv {
 
         decl.args.insert(0, clos);
 
-        let cont = self.walk_cexpr(*cont);
+        
 
         let mut rec = Vec::new();
         rec.push(Atom::Var(decl.func));
         for var in &self.freevars {
             rec.push(Atom::Var(*var));
         }
+
         
-        CExpr::Record(rec, decl.func, Box::new(cont))
+        let cont = Box::new(self.walk_cexpr(*cont));
+        let newbind = decl.func;
+        CExpr::Let(decl,
+            Box::new(CExpr::Record(rec, newbind, cont)))
 
     }
 
@@ -86,6 +109,34 @@ impl CExprVisitor for ClosConv {
     fn visit_fix(&mut self, decls: Vec<CDecl>, cont: Box<CExpr>) -> CExpr {
 
         todo!()
+    }
+
+    fn visit_uniop(&mut self, prim: Prim, arg: Atom, ret: Symbol, cont: Box<CExpr>) -> CExpr {
+        let cont = Box::new(self.walk_cexpr(*cont));
+        self.freevars.remove(&ret);
+        if let Atom::Var(x) = arg {
+            self.freevars.insert(x);
+        }
+        CExpr::Uniop(prim, arg, ret, cont)
+    }
+
+    fn visit_binop(
+        &mut self,
+        prim: Prim,
+        arg1: Atom,
+        arg2: Atom,
+        ret: Symbol,
+        cont: Box<CExpr>,
+    ) -> CExpr {
+        let cont = Box::new(self.walk_cexpr(*cont));
+        self.freevars.remove(&ret);
+        if let Atom::Var(x) = arg1 {
+            self.freevars.insert(x);
+        }
+        if let Atom::Var(x) = arg2 {
+            self.freevars.insert(x);
+        }
+        CExpr::Binop(prim, arg1, arg2, ret, cont)
     }
 }
 
@@ -100,9 +151,9 @@ fn opt_test() {
     let res = parse_program(&mut par);
     if let Ok(res) = res {
         println!("\n{res}");
-        let cexpr = cps_trans_top(&res);
+        let cexpr = cps::cps_trans_top(&res);
         println!("\n{}", cexpr);
-        
+
         let cexpr = ClosConv::run(cexpr);
         println!("\n{}", cexpr);
     } else {

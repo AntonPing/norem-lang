@@ -3,7 +3,7 @@ use std::fmt;
 use lazy_static::__Deref;
 
 use crate::ast::*;
-use crate::backend::core::*;
+use crate::backend::*;
 use crate::symbol::*;
 
 impl fmt::Display for Expr {
@@ -260,7 +260,9 @@ impl Printer {
         write!(f," = ")?;
         self.indent_newline(f, 2)?;
         self.print_cexpr(f, body)?;
-        write!(f, ";")
+        write!(f, ";")?;
+        self.dedent(2);
+        Ok(())
     }
 
     pub fn print_tag(&mut self, f: &mut fmt::Formatter, tag: &Tag) -> fmt::Result {
@@ -307,7 +309,7 @@ impl Printer {
                 }
                 self.dedent_newline(f, 2)?;
                 write!(f, "in")?;
-                self.indent_newline(f, 2);
+                self.indent_newline(f, 2)?;
                 self.print_cexpr(f, body)?;
                 self.dedent_newline(f, 2)?;
                 write!(f, "end")
@@ -330,7 +332,7 @@ impl Printer {
                     write!(f,"| ")?;
                     self.print_cexpr(f, cont)?;
                 }
-                self.dedent_newline(f, 2);
+                self.dedent_newline(f, 2)?;
                 write!(f, "end")
             }
             CExpr::Ifte(cond, trbr, flbr) => {

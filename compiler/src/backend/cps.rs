@@ -1,74 +1,14 @@
-use std::fmt;
-use crate::symbol::*;
-use crate::ast::*;
+use crate::backend::*;
+use super::visitor::*;
 use crate::utils::Span;
 
-use super::visitor::CExprVisitor;
-use super::opt1::opt_level1;
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum Atom {
-    Var(Symbol),
-    Glob(Symbol),
-    Reg(usize),
-    Prim(Prim),
-    Int(i64),
-    Real(f64),
-    Bool(bool),
-    Char(char),
-}
-
-impl fmt::Display for Atom {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Atom::Var(x) => write!(f,"{x}"),
-            Atom::Glob(x) => write!(f,"@{x}"),
-            Atom::Reg(x) => write!(f,"reg{x}"),
-            Atom::Prim(x) => write!(f,"{x}"),
-            Atom::Int(x) => write!(f,"{x}"),
-            Atom::Real(x) => write!(f,"{x}"),
-            Atom::Bool(x) => write!(f,"{x}"),
-            Atom::Char(x) => write!(f,"{x}"),
-        }
-    }
-}
-
-
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct CDecl {
-    pub func: Symbol,
-    pub args: Vec<Symbol>,
-    pub body: Box<CExpr>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum CExpr {
-    App(Atom, Vec<Atom>),
-    Let(CDecl, Box<CExpr>),
-    Fix(Vec<CDecl>, Box<CExpr>),
-    Uniop(Prim, Atom, Symbol, Box<CExpr>),
-    Binop(Prim, Atom, Atom, Symbol, Box<CExpr>),
-    Switch(Atom, Vec<CExpr>),
-    Ifte(Atom, Box<CExpr>, Box<CExpr>),
-    Record(Vec<Atom>, Symbol, Box<CExpr>),
-    Select(usize, Atom, Symbol, Box<CExpr>),
-    Halt(Atom),
-    Tag(Tag, Box<CExpr>),
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Tag {
-    SubstAtom(Symbol, Atom),
-    SubstApp(CDecl),
-}
-
-
 pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
+    /*
     if cfg!(test) {
         println!("In context fn {} => {}", hole, &cont);
         println!("Eval expresssion {}", expr);
     }
+    */
 
     match expr {
         Expr::Lit(ExprLit { lit, span: _ }) => {
@@ -225,7 +165,7 @@ pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
                     .map(|x| Atom::Var(*x)).collect()
             );
 
-            println!("argslen = {}, {result}", args.len());
+            // println!("argslen = {}, {result}", args.len());
 
             /* 
                 eval the function and arguments to fill the correspoding
@@ -233,7 +173,7 @@ pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
             */
             result = cps_trans(func, funcvar, Box::new(result));
             for (i,arg) in args.iter().enumerate() {
-                println!("eval {i} {arg}");
+                // println!("eval {i} {arg}");
                 // the original i-th argument became (i+1)-th now
                 result = cps_trans(arg, argsvar[i+1], Box::new(result));
             }
@@ -276,8 +216,11 @@ pub fn cps_trans(expr: &Expr, hole: Symbol, cont: Box<CExpr>) -> CExpr {
 
 pub fn cps_trans_top(expr: &Expr) -> CExpr {
     let temp = genvar('t');
-    cps_trans(expr, temp, Box::new(
-        CExpr::Halt(Atom::Var(temp))))
+    let res = cps_trans(expr, temp, Box::new(
+        CExpr::Halt(Atom::Var(temp))));
+    let mut reduce = super::opt1::Opt1Reduce::new();
+    let res = reduce.walk_cexpr(res);
+    res
 }
 
 
@@ -299,7 +242,7 @@ fn cps_trans_test() {
         let cexpr = reduce.walk_cexpr(cexpr);
         println!("\n{}", cexpr);
 
-        let cexpr = opt_level1(cexpr);
+        let cexpr = super::opt1::opt_level1(cexpr);
         println!("\n{}", cexpr);
     } else {
         par.print_err();

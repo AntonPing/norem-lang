@@ -72,7 +72,7 @@ impl SymbTable {
     pub fn gensym(&mut self, ch: char) -> Symbol {
         let old = self.gensym_idx;
         self.gensym_idx += 1;
-        println!("{ch}{old} generated!");
+        // println!("{ch}{old} generated!");
         Symbol::Gen(ch, old)
     }
 
