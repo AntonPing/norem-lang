@@ -3,8 +3,9 @@ use crate::symbol::*;
 
 pub mod visitor;
 pub mod opt1;
-pub mod clos;
-pub mod cps;
+pub mod clos_conv;
+pub mod cps_trans;
+pub mod reg_alloc;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Atom {
@@ -62,6 +63,8 @@ pub enum CExpr {
 pub enum Tag {
     SubstAtom(Symbol, Atom),
     SubstApp(CDecl),
+    VarDef(Symbol),
+    VarUse(Symbol),
 }
 
 impl CDecl {

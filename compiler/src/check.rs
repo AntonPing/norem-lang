@@ -9,7 +9,6 @@ pub struct Checker {
     type_env: MultiSet<Symbol>,
     thrown: bool,
     error: Vec<CheckError>,
-
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -115,6 +115,18 @@ impl CExprVisitor for Opt1Scan {
         cont: Box<CExpr>
     ) -> CExpr {
         let cont = Box::new(self.walk_cexpr(*cont));
+        
+        if self.ref_count.remove_all(&ret) == 0 {
+            // dead code elimination
+            assert_eq!(self.call_count.remove_all(&ret),0);
+            self.change = true;
+            return *cont;
+        }
+
+        if let Atom::Var(sym) = &arg {
+            self.ref_count.insert(*sym);
+        }
+
         match (prim, arg) {
             (Prim::INeg, Atom::Int(x)) => {
                 self.change = true;
@@ -139,6 +151,21 @@ impl CExprVisitor for Opt1Scan {
         cont: Box<CExpr>,
     ) -> CExpr {
         let cont = Box::new(self.walk_cexpr(*cont));
+
+        if self.ref_count.remove_all(&ret) == 0 {
+            // dead code elimination
+            assert_eq!(self.call_count.remove_all(&ret),0);
+            self.change = true;
+            return *cont;
+        }
+
+        if let Atom::Var(sym) = &arg1 {
+            self.ref_count.insert(*sym);
+        }
+        if let Atom::Var(sym) = &arg2 {
+            self.ref_count.insert(*sym);
+        }
+
         match (prim, arg1, arg2) {
             (Prim::IAdd, Atom::Int(x), Atom::Int(y)) => {
                 self.change = true;
@@ -281,25 +308,26 @@ pub fn opt_level1(expr: CExpr) -> CExpr {
 #[test]
 fn opt_test() {
     use crate::parser::*;
-    /*
+    
     let string = "
         (fn x y => (* (+ x 1) (- y 2))) 3 4
     ";
-    */
-
+    
+    /*
     let string = "
         (fn f g x => ((f x) (g x))) + (fn x => x) 5
     ";
+    */
     let mut par = Parser::new(string);
 
     let res = parse_program(&mut par);
     if let Ok(res) = res {
         println!("\n{res}");
-        let cexpr = cps::cps_trans_top(&res);
-        //println!("\n{}", cexpr);
+        let expr = cps_trans::cps_trans_top(&res);
+        println!("\n{}", expr);
 
-        let cexpr = opt_level1(cexpr);
-        println!("\n{}", cexpr);
+        let expr = opt_level1(expr);
+        println!("\n{}", expr);
     } else {
         par.print_err();
     }

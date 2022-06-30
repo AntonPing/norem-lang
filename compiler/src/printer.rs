@@ -1,9 +1,7 @@
 use std::fmt;
 
-use lazy_static::__Deref;
-
 use crate::ast::*;
-use crate::backend::*;
+use crate::core::*;
 use crate::symbol::*;
 
 impl fmt::Display for Expr {
@@ -20,10 +18,10 @@ impl fmt::Display for Decl {
     }
 }
 
-impl fmt::Display for CExpr {
+impl fmt::Display for Core {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut pr = Printer::new(50);
-        pr.print_cexpr(f, self)
+        pr.print_core(f, self)
     }
 }
 
@@ -250,8 +248,8 @@ impl Printer {
         }
     }
 
-    pub fn print_cdecl(&mut self, f: &mut fmt::Formatter, decl: &CDecl) -> fmt::Result {
-        let CDecl { func, args, body } = decl;
+    pub fn print_core_decl(&mut self, f: &mut fmt::Formatter, decl: &CoreDecl) -> fmt::Result {
+        let CoreDecl { func, args, body } = decl;
         write!(f,"{func}")?;
 
         for arg in args {
@@ -259,7 +257,7 @@ impl Printer {
         }
         write!(f," = ")?;
         self.indent_newline(f, 2)?;
-        self.print_cexpr(f, body)?;
+        self.print_core(f, body)?;
         write!(f, ";")?;
         self.dedent(2);
         Ok(())
@@ -273,9 +271,9 @@ impl Printer {
         }
     }
 
-    pub fn print_cexpr(&mut self, f: &mut fmt::Formatter, expr: &CExpr) -> fmt::Result {
+    pub fn print_core(&mut self, f: &mut fmt::Formatter, expr: &Core) -> fmt::Result {
         match expr {
-            CExpr::App(func, args) => {
+            Core::App(CoreApp { func, args }) => {
                 write!(f,"{func}(")?;
                 if !args.is_empty() {
                     write!(f,"{}", &args[0])?;
@@ -285,87 +283,75 @@ impl Printer {
                 }
                 write!(f,")")
             }
-            CExpr::Let(decl, body) => {
-                write!(f,"let ")?;
-                self.print_cdecl(f, decl)?;
-                write!(f," in")?;
-                self.newline(f)?;
-                self.print_cexpr(f, body)
-            }
-            CExpr::Fix(decls, body) => {
+            Core::Let(CoreLet { decls, body }) => {
                 if decls.is_empty() {
                     write!(f, "let (empty) in ")?;
-                    self.print_cexpr(f, body)?;
-                    write!(f, " end")?;
-                    return Ok(())
-                }
-
-                write!(f, "let")?;
-                self.indent(2);
-
-                for decl in decls {
                     self.newline(f)?;
-                    self.print_cdecl(f, decl)?;
+                    self.print_core(f, body)
+                } else if decls.len() == 1 {
+                    write!(f,"let ")?;
+                    self.print_core_decl(f, &decls[0])?;
+                    write!(f," in")?;
+                    self.newline(f)?;
+                    self.print_core(f, body)
+                } else {
+                    write!(f,"let ")?;
+                    self.indent(2);
+                    for decl in decls {
+                        self.newline(f)?;
+                        self.print_core_decl(f, decl)?;
+                    }
+                    self.dedent_newline(f, 2)?;
+                    write!(f," in")?;
+                    self.indent_newline(f, 2)?;
+                    self.print_core(f, body)?;
+                    self.dedent_newline(f, 2)?;
+                    write!(f, "end")
                 }
-                self.dedent_newline(f, 2)?;
-                write!(f, "in")?;
-                self.indent_newline(f, 2)?;
-                self.print_cexpr(f, body)?;
-                self.dedent_newline(f, 2)?;
-                write!(f, "end")
             }
-            CExpr::Uniop(prim, arg, ret, cont) => {
-                write!(f,"{prim} {arg} -> {ret}")?;
+            Core::Opr(CoreOpr { prim, args, bind, cont }) => {
+                write!(f,"{prim}")?;
+                for arg in args {
+                    write!(f, " {arg}")?;
+                }
+                write!(f, " -> {bind}")?;
                 self.newline(f)?;
-                self.print_cexpr(f, cont.deref())
+                self.print_core(f, cont)
             }
-            CExpr::Binop(prim, arg1, arg2, ret, cont) => {
-                write!(f,"{prim} {arg1} {arg2} -> {ret}")?;
-                self.newline(f)?;
-                self.print_cexpr(f, cont.deref())
-            }
-            CExpr::Switch(n, conts) => {
-                write!(f,"switch {n}")?;
+            Core::Case(CoreCase { arg, brs }) => {
+                write!(f,"switch {arg}")?;
                 self.indent(2);
-                for cont in conts {
+                for br in brs {
                     self.newline(f)?;
                     write!(f,"| ")?;
-                    self.print_cexpr(f, cont)?;
+                    self.print_core(f, br)?;
                 }
                 self.dedent_newline(f, 2)?;
                 write!(f, "end")
             }
-            CExpr::Ifte(cond, trbr, flbr) => {
-                write!(f,"if {cond}")?;
-                self.newline(f)?;
-                write!(f,"then ")?;
-                self.print_cexpr(f, trbr)?;
-                self.newline(f)?;
-                write!(f,"else ")?;
-                self.print_cexpr(f, flbr)
-            }
-            CExpr::Record(xs, ret, cont) => {
-                write!(f,"{{")?;
-                for x in xs {
-                    write!(f, " {x}")?;
+            Core::Rec(CoreRec { flds, bind, cont }) => {
+                write!(f,"record {{")?;
+                for fld in flds {
+                    write!(f, " {fld}")?;
                 }
-                write!(f," }} -> {ret}")?;
+                write!(f," }} -> {bind}")?;
                 self.newline(f)?;
-                self.print_cexpr(f, cont)
+                self.print_core(f, cont)
             }
-            CExpr::Select(n, rec, ret, cont) => {
-                write!(f,"select {n} of {rec} -> {ret}")?;
+            Core::Sel(CoreSel { arg, idx, bind, cont }) => {
+                write!(f,"select {arg}[{idx}] -> {bind}")?;
                 self.newline(f)?;
-                self.print_cexpr(f, cont)
+                self.print_core(f, cont)
             }
-            CExpr::Halt(arg) => {
+            Core::Halt(arg) => {
                 write!(f,"halt({arg})")
             }
-            CExpr::Tag(tag, expr) => {
+            Core::Tag(tag, expr) => {
                 write!(f,"tag{{")?;
                 self.print_tag(f, tag)?;
-                write!(f," : ")?;
-                self.print_cexpr(f, expr)?;
+                write!(f," :")?;
+                self.newline(f)?;
+                self.print_core(f, expr)?;
                 write!(f,"}}")
             }
         }

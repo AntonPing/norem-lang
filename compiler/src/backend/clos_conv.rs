@@ -151,7 +151,7 @@ fn opt_test() {
     let res = parse_program(&mut par);
     if let Ok(res) = res {
         println!("\n{res}");
-        let cexpr = cps::cps_trans_top(&res);
+        let cexpr = cps_trans::cps_trans_top(&res);
         println!("\n{}", cexpr);
 
         let cexpr = ClosConv::run(cexpr);
