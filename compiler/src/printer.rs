@@ -267,6 +267,9 @@ impl Printer {
         match tag {
             Tag::SubstAtom(_, _) => write!(f,"{tag:?}"),
             Tag::SubstApp(_) => write!(f,"{tag:?}"),
+            Tag::VarAlloc(x) => write!(f,"alloc {x}"),
+            Tag::VarFree(x) => write!(f,"free {x}"),
+            Tag::VarFreeEnd(xs) => write!(f,"free end {xs:?}"),
             _ => write!(f,"<tag>"),
         }
     }
@@ -283,7 +286,7 @@ impl Printer {
                 }
                 write!(f,")")
             }
-            Core::Let(CoreLet { decls, body }) => {
+            Core::Let(CoreLet { decls, cont: body }) => {
                 if decls.is_empty() {
                     write!(f, "let (empty) in ")?;
                     self.newline(f)?;

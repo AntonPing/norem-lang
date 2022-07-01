@@ -17,6 +17,10 @@ impl ClosConv {
             freevars: HashSet::new(),
         }
     }
+    pub fn run(expr: Core) -> Core {
+        let mut ctx = ClosConv::new();
+        ctx.walk_cexpr(expr)
+    }
 }
 
 impl Visitor for ClosConv {
@@ -70,83 +74,84 @@ impl Visitor for ClosConv {
         =======> becomes =======>
 
         let foo(c,x,y,...,z) = 
-            select 0 c -> v1;
+            select c[0] -> v1;
             ...
-            select n c -> vn;
+            select c[n] -> vn;
             bar; in
         record { foo, v1, ..., vn } -> foo;
         baz
     */
-    fn visit_let(&mut self, decl: CDecl, cont: Box<Core>) -> Core {
+
+    fn visit_let(&mut self, expr: CoreLet) -> Core {
         
-        let mut decl = self.visit_cdecl(decl);
-        for arg in &decl.args {
-            self.freevars.remove(arg);
-        }
-
-        for var in &self.freevars {
-            println!("free {var}");
-        }
-
-        let clos = genvar('c');
-
-        for (i,var) in self.freevars.iter().enumerate() {
-            decl.body = Box::new(Core::Select(i, 
-                Atom::Var(clos), *var, decl.body));
-        }
-
-        decl.args.insert(0, clos);
-
+        let CoreLet { decls, cont: body } = expr;
         
+        let c = genvar('c');
 
-        let mut rec = Vec::new();
-        rec.push(Atom::Var(decl.func));
-        for var in &self.freevars {
-            rec.push(Atom::Var(*var));
-        }
+        let decls: Vec<CoreDecl> = decls.into_iter()
+            .map(|decl| {
+                let CoreDecl { func, mut args, body } = decl;
+                let body = Box::new(self.walk_cexpr(*body));
+                self.freevars.remove(&func);
+                for arg in &args {
+                    self.freevars.remove(arg);
+                }
 
-        
-        let cont = Box::new(self.walk_cexpr(*cont));
-        let newbind = decl.func;
-        Core::Let(decl,
-            Box::new(Core::Record(rec, newbind, cont)))
+                let newbody = self.freevars.iter()
+                    .copied().enumerate()
+                    .fold(
+                        *body,
+                        |acc,(i,x)| {
+                            Core::Sel(CoreSel {
+                                arg: Atom::Var(c),
+                                idx: i,
+                                bind: x,
+                                cont: Box::new(acc),
+                            })
+                        }
+                    );
+                args.insert(0, c);
+                CoreDecl {
+                    func,
+                    args,
+                    body: Box::new(newbody),
+                }
+            })
+            .collect();
 
+        let body = Box::new(self.walk_cexpr(*body));
+        // todo: support mutual recursive later
+        let wrongbind = decls[0].func;
+
+        Core::Let(CoreLet {
+            decls,
+            cont: Box::new(Core::Rec(CoreRec {
+                flds: [Atom::Var(wrongbind)].into_iter()
+                    .chain(self.freevars.iter()
+                        .map(|sym| Atom::Var(*sym)))
+                    .collect(),
+                bind: wrongbind,
+                cont: body,
+            })),
+        })
     }
 
+    fn visit_opr(&mut self, expr: CoreOpr) -> Core {
+        let CoreOpr { prim, args, bind, cont } = expr;
 
-    fn visit_fix(&mut self, decls: Vec<CDecl>, cont: Box<Core>) -> Core {
-
-        todo!()
-    }
-
-    fn visit_uniop(&mut self, prim: Prim, arg: Atom, ret: Symbol, cont: Box<Core>) -> Core {
         let cont = Box::new(self.walk_cexpr(*cont));
-        self.freevars.remove(&ret);
-        if let Atom::Var(x) = arg {
-            self.freevars.insert(x);
+        
+        self.freevars.remove(&bind);
+        for arg in &args {
+            if let Atom::Var(x) = arg {
+                self.freevars.insert(*x);
+            }
         }
-        Core::Uniop(prim, arg, ret, cont)
-    }
 
-    fn visit_binop(
-        &mut self,
-        prim: Prim,
-        arg1: Atom,
-        arg2: Atom,
-        ret: Symbol,
-        cont: Box<Core>,
-    ) -> Core {
-        let cont = Box::new(self.walk_cexpr(*cont));
-        self.freevars.remove(&ret);
-        if let Atom::Var(x) = arg1 {
-            self.freevars.insert(x);
-        }
-        if let Atom::Var(x) = arg2 {
-            self.freevars.insert(x);
-        }
-        Core::Binop(prim, arg1, arg2, ret, cont)
+        Core::Opr(CoreOpr { prim, args, bind, cont })
     }
 }
+
 
 #[test]
 fn opt_test() {
@@ -159,11 +164,12 @@ fn opt_test() {
     let res = parse_program(&mut par);
     if let Ok(res) = res {
         println!("\n{res}");
-        let cexpr = cps_trans::cps_trans_top(&res);
-        println!("\n{}", cexpr);
+        let expr = cps_trans::cps_trans_top(&res);
+        println!("\n{}", expr);
 
-        let cexpr = ClosConv::run(cexpr);
-        println!("\n{}", cexpr);
+        let expr = ClosConv::run(expr);
+
+        println!("\n{}", expr);
     } else {
         par.print_err();
     }

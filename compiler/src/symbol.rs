@@ -16,6 +16,7 @@ pub enum Symbol {
     Var(usize),
     VarN(usize, usize),
     Gen(char, usize),
+    Reg(usize),
     Str(usize),
     //Forall(usize),
 }
@@ -113,7 +114,10 @@ impl fmt::Display for Symbol {
                 write!(f, "{}_{n}", table.get_idx(x).unwrap())
             }
             &Symbol::Gen(ch, n) => {
-                write!(f, "{}{}", ch, n)
+                write!(f, "{ch}{n}")
+            }
+            &Symbol::Reg(n) => {
+                write!(f, "reg{n}")
             }
             &Symbol::Str(n) => {
                 write!(f, "{}", table.get_str(n).unwrap())
@@ -136,6 +140,9 @@ pub fn builtin(id: usize) -> Symbol {
     Symbol::BuiltIn(id)
 }
 
+pub fn reg(n: usize) -> Symbol {
+    Symbol::Reg(n)
+}
 
 macro_rules! globals {
     (@step $idx:expr, ) => {

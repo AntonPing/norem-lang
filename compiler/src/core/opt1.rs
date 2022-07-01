@@ -52,7 +52,7 @@ impl Visitor for Opt1Scan {
     }
 
     fn visit_let(&mut self, expr: CoreLet) -> Core {
-        let CoreLet { decls, body } = expr;
+        let CoreLet { decls, cont: body } = expr;
         let body = Box::new(self.walk_cexpr(*body));
 
         // let (emtpy) in foo =====> foo
@@ -83,7 +83,7 @@ impl Visitor for Opt1Scan {
 
         Core::Let(CoreLet {
             decls,
-            body: tagvec.into_iter()
+            cont: tagvec.into_iter()
                 .fold(body, |acc, x|
                     Box::new(Core::Tag(x, acc)))
         })

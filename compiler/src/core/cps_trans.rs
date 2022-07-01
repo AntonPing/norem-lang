@@ -7,9 +7,9 @@ use crate::symbol::*;
 use crate::utils::Span;
 
 pub fn cps_trans(
-    expr: &Expr,
-    bind: Symbol,
-    cont: Box<Core>
+    expr0: &Expr,
+    bind0: Symbol,
+    cont0: Box<Core>
 ) -> Core {
     /*
     if cfg!(test) {
@@ -18,7 +18,7 @@ pub fn cps_trans(
     }
     */
 
-    match expr {
+    match expr0 {
         Expr::Lit(ExprLit { lit, span: _ }) => {
             // literals just fill into the hole
             let atom = match lit {
@@ -27,23 +27,23 @@ pub fn cps_trans(
                 LitVal::Bool(x) => Atom::Bool(*x),
                 LitVal::Char(x) => Atom::Char(*x),
             };
-            Core::Tag(Tag::SubstAtom(bind,atom),cont)
+            Core::Tag(Tag::SubstAtom(bind0,atom),cont0)
         }
         Expr::Var(ExprVar { ident, span: _ }) => {
             // variables just fill into the hole
             let atom = Atom::Var(*ident);
-            Core::Tag(Tag::SubstAtom(bind,atom),cont)
+            Core::Tag(Tag::SubstAtom(bind0,atom),cont0)
         }
         Expr::Prim(_) => {
             let app = Expr::App(ExprApp {
-                func: Box::new(expr.clone()),
+                func: Box::new(expr0.clone()),
                 args: Vec::new(),
                 span: Span::default(),
             });
             /*
                 primitives will be handled in application recursively. See the match branch for application, it's somewhere below.
             */
-            cps_trans(&app, bind, cont)
+            cps_trans(&app, bind0, cont0)
         }
         Expr::Lam(ExprLam { args, body, span: _ }) => {
             // println!("here lam {}", &expr);
@@ -77,8 +77,8 @@ pub fn cps_trans(
                         })
                     ))),
                 }],
-                body: Box::new(Core::Tag(
-                    Tag::SubstAtom(bind,Atom::Var(f)),cont)),
+                cont: Box::new(Core::Tag(
+                    Tag::SubstAtom(bind0,Atom::Var(f)),cont0)),
             })
         }
 
@@ -125,7 +125,7 @@ pub fn cps_trans(
                     });
 
                     // then transform again, recursively
-                    return cps_trans(&newapp, bind, cont);
+                    return cps_trans(&newapp, bind0, cont0);
                 }
 
                 // otherwise, in the case arity == args.len()
@@ -154,8 +154,8 @@ pub fn cps_trans(
                             args: argsvar.iter()
                                 .map(|sym| Atom::Var(*sym))
                                 .collect(),
-                            bind,
-                            cont,
+                            bind: bind0,
+                            cont: cont0,
                         }), 
                         |acc, (expr, bind)| {
                             cps_trans(expr, *bind, Box::new(acc))
@@ -171,7 +171,7 @@ pub fn cps_trans(
             // sometimes people write unecessary parens like (x)
             // in such case we treat it as x
             if args.len() == 0 {
-                return cps_trans(func, bind, cont);
+                return cps_trans(func, bind0, cont0);
             }
             
             /*
@@ -190,26 +190,24 @@ pub fn cps_trans(
                 where f0, r and t1...tn are generated variables
             */
            
-            let funcvar = genvar('f');
+            let f = genvar('f');
             let r = genvar('r');
-            let argsvar: Vec<Symbol> = args.iter()
-                .map(|_| genvar('x'))
+            let ts: Vec<Symbol> = args.iter()
+                .map(|_| genvar('t'))
                 .collect();
-
             
-            [(func.deref(), &funcvar)].into_iter()
-                .chain(args.iter()
-                    .zip(argsvar.iter()))
+            [(func.deref(), &f)].into_iter()
+                .chain(args.iter().zip(ts.iter()))
                 .fold(Core::Let(CoreLet {
                         decls: vec![CoreDecl {
                             func: r,
-                            args: vec![bind],
-                            body: cont,
+                            args: vec![bind0],
+                            body: cont0,
                         }],
-                        body: Box::new(Core::App(CoreApp {
-                            func: Atom::Var(funcvar),
+                        cont: Box::new(Core::App(CoreApp {
+                            func: Atom::Var(f),
                             args: [r].iter()
-                                .chain(argsvar.iter())
+                                .chain(ts.iter())
                                 .map(|sym| Atom::Var(*sym))
                                 .collect(),
                         }))
@@ -270,7 +268,7 @@ pub fn cps_trans(
                         }
                     })
                     .collect(),
-                body: Box::new(cps_trans(body, bind, cont))
+                cont: Box::new(cps_trans(body, bind0, cont0))
             })
         }
         Expr::Case(ExprCase { expr, rules, span: _ }) => {

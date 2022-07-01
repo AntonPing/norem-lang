@@ -5,12 +5,13 @@ pub mod visitor;
 pub mod cps_trans;
 pub mod opt1;
 pub mod clos_conv;
+pub mod reg_alloc;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Atom {
     Var(Symbol),
     Glob(Symbol),
-    Reg(usize),
+    //Reg(usize),
     Prim(Prim),
     Int(i64),
     Real(f64),
@@ -25,7 +26,7 @@ impl fmt::Display for Atom {
         match self {
             Atom::Var(x) => write!(f,"{x}"),
             Atom::Glob(x) => write!(f,"@{x}"),
-            Atom::Reg(x) => write!(f,"reg{x}"),
+            //Atom::Reg(x) => write!(f,"reg{x}"),
             Atom::Prim(x) => write!(f,"{x}"),
             Atom::Int(x) => write!(f,"{x}"),
             Atom::Real(x) => write!(f,"{x}"),
@@ -53,7 +54,9 @@ pub enum Core {
 pub enum Tag {
     SubstAtom(Symbol, Atom),
     SubstApp(CoreDecl),
-    VarUse(Symbol),
+    VarAlloc(Symbol),
+    VarFree(Symbol),
+    VarFreeEnd(Vec<Symbol>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -72,7 +75,7 @@ pub struct CoreDecl {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CoreLet {
     pub decls: Vec<CoreDecl>,
-    pub body: Box<Core>,
+    pub cont: Box<Core>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

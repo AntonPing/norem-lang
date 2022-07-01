@@ -55,7 +55,7 @@ pub trait Visitor {
             decls: expr.decls.into_iter()
                 .map(|def| self.visit_decl(def))
                 .collect(),
-            body: Box::new(self.walk_cexpr(*expr.body))
+            cont: Box::new(self.walk_cexpr(*expr.cont))
         })
     }
 
