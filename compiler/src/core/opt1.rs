@@ -18,6 +18,7 @@ pub struct Opt1Scan {
     change: bool,
     ref_count: MultiSet<Symbol>,
     call_count: MultiSet<Symbol>,
+
 }
 
 impl Opt1Scan {
@@ -30,34 +31,70 @@ impl Opt1Scan {
     }
 }
 
-impl Visitor for Opt1Scan {
+impl VisitorDownTop for Opt1Scan {
     fn visit_app(&mut self, expr: CoreApp) -> Core {
+        let CoreApp { func, args } = expr;
+
         if let Atom::Var(sym) = &expr.func {
             self.ref_count.insert(*sym);
             self.call_count.insert(*sym);
         }
-        for arg in &expr.args {
+        for arg in &args {
             if let Atom::Var(sym) = arg {
                 self.ref_count.insert(*sym);
             }
         }
-        Core::App(expr)
+
+        let func = self.visit_atom(func);
+        let args = args.into_iter()
+            .map(|arg| self.visit_atom(arg))
+            .collect();
+        Core::App(CoreApp { func, args })
     }
 
     fn visit_halt(&mut self, arg: Atom) -> Core {
         if let Atom::Var(sym) = &arg {
             self.ref_count.insert(*sym);
         }
+
+        let arg = self.visit_atom(arg);
         Core::Halt(arg)
     }
 
     fn visit_let(&mut self, expr: CoreLet) -> Core {
-        let CoreLet { decls, cont: body } = expr;
-        let body = Box::new(self.walk_cexpr(*body));
+        let CoreLet { decl, cont } = expr;
+        let cont = Box::new(self.walk_cexpr(*cont));
+
+        if self.ref_count.remove_all(&decl.func) == 0 {
+            // dead code elimination
+            assert_eq!(self.call_count.remove_all(&decl.func),0);
+            self.change = true;
+            *cont
+        } else if self.call_count.remove_all(&decl.func) == 1 {
+            // safe beta inlining
+            self.change = true;
+            let decl = self.visit_decl(decl);
+            Core::Tag(Tag::SubstApp(decl.clone()),
+                Box::new(Core::Let(CoreLet { decl, cont })))
+        } else {
+            // no changes
+            let decl = self.visit_decl(decl);
+            Core::Let(CoreLet { decl, cont })
+        }
+    }
+
+    fn visit_fix(&mut self, expr: CoreFix) -> Core {
+
+        /*
+            todo!
+        */
+
+        let CoreFix { decls, cont } = expr;
+        let cont = Box::new(self.walk_cexpr(*cont));
 
         // let (emtpy) in foo =====> foo
         if decls.is_empty() {
-            return *body;
+            return *cont;
         }
 
         let mut tagvec: Vec<Tag> = Vec::new();
@@ -81,14 +118,13 @@ impl Visitor for Opt1Scan {
             })
             .collect();
 
-        Core::Let(CoreLet {
+        Core::Fix(CoreFix {
             decls,
             cont: tagvec.into_iter()
-                .fold(body, |acc, x|
+                .fold(cont, |acc, x|
                     Box::new(Core::Tag(x, acc)))
         })
     }
-
 
     fn visit_opr(&mut self, expr: CoreOpr) -> Core {
         let CoreOpr { prim, args, bind, cont } = expr;
@@ -100,60 +136,17 @@ impl Visitor for Opt1Scan {
             self.change = true;
             return *cont;
         }
-
         for arg in &args {
             if let Atom::Var(sym) = &arg {
                 self.ref_count.insert(*sym);
             }
         }
 
-        // constant folding
-        match args.len() {
-            0 => {
-                todo!()
-            }
-            1 => {
-                match (&prim, &args[0]) {
-                    (Prim::INeg, Atom::Int(x)) => {
-                        self.change = true;
-                        Core::Tag(Tag::SubstAtom(bind, Atom::Int(-x)), cont)
-                    }
-                    (Prim::BNot, Atom::Bool(x)) => {
-                        self.change = true;
-                        Core::Tag(Tag::SubstAtom(bind, Atom::Bool(!x)), cont)
-                    }
-                    _ => {
-                        Core::Opr(CoreOpr { prim, args, bind, cont })
-                    }
-                }
-            }
-            2 => {
-                match (&prim, &args[0], &args[1]) {
-                    (Prim::IAdd, Atom::Int(x), Atom::Int(y)) => {
-                        self.change = true;
-                        Core::Tag(Tag::SubstAtom(bind, Atom::Int(x+y)), cont)
-                    }
-                    (Prim::ISub, Atom::Int(x), Atom::Int(y)) => {
-                        self.change = true;
-                        Core::Tag(Tag::SubstAtom(bind, Atom::Int(x-y)), cont)
-                    }
-                    (Prim::IMul, Atom::Int(x), Atom::Int(y)) => {
-                        self.change = true;
-                        Core::Tag(Tag::SubstAtom(bind, Atom::Int(x*y)), cont)
-                    }
-                    (Prim::IDiv, Atom::Int(x), Atom::Int(y)) => {
-                        self.change = true;
-                        Core::Tag(Tag::SubstAtom(bind, Atom::Int(x/y)), cont)
-                    }
-                    _ => {
-                        Core::Opr(CoreOpr { prim, args, bind, cont })
-                    }
-                }
-            }
-            _ => {
-                todo!()
-            }
-        }        
+        let args = args.into_iter()
+            .map(|arg| self.visit_atom(arg))
+            .collect();
+        let bind = self.visit_var_def(bind);
+        Core::Opr(CoreOpr { prim, cont, args, bind })
     }
 }
 
@@ -161,37 +154,26 @@ impl Visitor for Opt1Scan {
 pub struct Opt1Reduce {
     atom_map: HashMap<Symbol,Atom>,
     app_map: HashMap<Symbol,CoreDecl>,
+    setget_map: HashMap<(Symbol,usize),Atom>,
+    change: bool,
 }
 
 impl Opt1Reduce {
     pub fn new() -> Opt1Reduce {
         Opt1Reduce {
             atom_map: HashMap::new(),
-            app_map: HashMap::new()
+            app_map: HashMap::new(),
+            setget_map: HashMap::new(),
+            change: false,
         }
     }
-    pub fn run_opt1_reduce(expr: Core) -> Core {
+    pub fn run(expr: Core) -> Core {
         let mut scan = Opt1Reduce::new();
         scan.walk_cexpr(expr)
     }
 }
 
-impl Opt1Reduce {
-    pub fn subst_atom(&mut self, atom: Atom) -> Atom {
-        let mut atom = atom;
-        while let Atom::Var(sym) = atom {
-            if let Some(res) = self.atom_map.get(&sym) {
-                atom = *res
-            } else {
-                return atom
-            }
-        }
-        atom
-    }
-}
-
-
-impl Visitor for Opt1Reduce {
+impl VisitorTopDown for Opt1Reduce {
     fn visit_atom(&mut self, atom: Atom) -> Atom {
         let mut atom = atom;
         while let Atom::Var(sym) = atom {
@@ -215,29 +197,112 @@ impl Visitor for Opt1Reduce {
                 }
                 return self.walk_cexpr(*decl.body);
             }
-        } 
+        }
 
-        Core::App(CoreApp {
-            func: self.visit_atom(func),
-            args: args.into_iter()
-                .map(|arg| self.visit_atom(arg))
-                .collect(),
-        })
+        let func = self.visit_atom(func);
+        let args = args.into_iter()
+            .map(|arg| self.visit_atom(arg))
+            .collect();
+        Core::App(CoreApp { func, args })
     }
-    /*
     fn visit_opr(&mut self, expr: CoreOpr) -> Core {
         let CoreOpr { prim, args, bind, cont } = expr;
+        let args: Vec<Atom> = args.into_iter()
+            .map(|arg| self.visit_atom(arg))
+            .collect();
+        let bind = self.visit_var_def(bind);
+        
+        // constant folding
+        match args.len() {
+            0 => {
+                todo!()
+            }
+            1 => {
+                match (&prim, &args[0]) {
+                    (Prim::INeg, Atom::Int(x)) => {
+                        self.change = true;
+                        self.atom_map.insert(bind,  Atom::Int(-x));
+                        self.walk_cexpr(*cont)
+                    }
+                    (Prim::BNot, Atom::Bool(x)) => {
+                        self.change = true;
+                        self.atom_map.insert(bind,  Atom::Bool(!x));
+                        self.walk_cexpr(*cont)
+                    }
+                    _ => {
+                        let cont = Box::new(self.walk_cexpr(*cont));
+                        Core::Opr(CoreOpr { prim, args, bind, cont })
+                    }
+                }
+            }
+            2 => {
+                match (&prim, &args[0], &args[1]) {
+                    (Prim::IAdd, Atom::Int(x), Atom::Int(y)) => {
+                        self.change = true;
+                        self.atom_map.insert(bind,  Atom::Int(x+y));
+                        self.walk_cexpr(*cont)
+                    }
+                    (Prim::ISub, Atom::Int(x), Atom::Int(y)) => {
+                        self.change = true;
+                        self.atom_map.insert(bind,  Atom::Int(x-y));
+                        self.walk_cexpr(*cont)
+                    }
+                    (Prim::IMul, Atom::Int(x), Atom::Int(y)) => {
+                        self.change = true;
+                        self.atom_map.insert(bind,  Atom::Int(x*y));
+                        self.walk_cexpr(*cont)
+                    }
+                    (Prim::IDiv, Atom::Int(x), Atom::Int(y)) => {
+                        self.change = true;
+                        self.atom_map.insert(bind,  Atom::Int(x/y));
+                        self.walk_cexpr(*cont)
+                    }
+                    _ => {
+                        let cont = Box::new(self.walk_cexpr(*cont));
+                        Core::Opr(CoreOpr { prim, args, bind, cont })
+                    }
+                }
+            }
+            _ => {
+                todo!()
+            }
+        }
+    }
 
-        Core::Opr(CoreOpr {
-            prim,
-            args: args.into_iter()
-                .map(|arg| self.visit_atom(arg))
-                .collect(),
-            bind,
+    fn visit_set(&mut self, expr: CoreSet) -> Core {
+        let CoreSet { rec, idx, arg, cont } = expr;
+
+        if let Atom::Var(sym) = rec {
+            self.setget_map.insert((sym,idx), arg);
+        }
+
+        Core::Set(CoreSet {
+            rec: self.visit_atom(rec),
+            idx,
+            arg: self.visit_atom(arg),
             cont: Box::new(self.walk_cexpr(*cont)),
         })
     }
-    */
+
+    fn visit_get(&mut self, expr: CoreGet) -> Core {
+        let CoreGet { rec, idx, bind, cont } = expr;
+
+        if let Atom::Var(sym) = rec {
+            if let Some(atom) = self.setget_map.get(&(sym,idx)) {
+                // set-get optimization
+                self.atom_map.insert(sym, *atom);
+                return self.walk_cexpr(*cont);
+            }
+        }
+
+        Core::Get(CoreGet {
+            rec: self.visit_atom(rec),
+            idx,
+            bind: self.visit_var_def(bind),
+            cont: Box::new(self.walk_cexpr(*cont)),
+        })
+    }
+
 
     fn visit_tag(&mut self, tag: Tag, cont: Box<Core>) -> Core {
         match tag {
@@ -263,14 +328,16 @@ pub fn opt_level1(expr: Core) -> Core {
     
     loop {
         n += 1;
+
         let mut scan = Opt1Scan::new();
         expr = scan.walk_cexpr(expr);
-        if scan.change {
-            let mut reduce = Opt1Reduce::new();
-            expr = reduce.walk_cexpr(expr);
-            println!("\n{n}:\n{}", expr);
+        println!("\nafter scan {n}:\n{}", expr);
+        let mut reduce = Opt1Reduce::new();
+        expr = reduce.walk_cexpr(expr);
+        println!("\nafter reduce {n}:\n{}", expr);
+        if scan.change || reduce.change {
+            continue;
         } else {
-            println!("\n{n}:\n{}", expr);
             return expr;
         }
     }

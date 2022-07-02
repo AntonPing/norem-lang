@@ -23,7 +23,7 @@ impl ClosConv {
     }
 }
 
-impl Visitor for ClosConv {
+impl VisitorDownTop for ClosConv {
 
     fn visit_app(&mut self, expr: CoreApp) -> Core {
         /*  
@@ -31,23 +31,25 @@ impl Visitor for ClosConv {
             
             =====> becomes =====>
             
-            select f[0] -> f';
+            get f[0] -> f';
             f'(f,a,b,...,z)
         */
 
-        if let Atom::Var(sym) = &expr.func {
+        let CoreApp { func, args } = expr;
+
+        if let Atom::Var(sym) = &func {
             self.freevars.insert(*sym);
         }
-        for arg in &expr.args {
+        for arg in &args {
             if let Atom::Var(sym) = arg {
                 self.freevars.insert(*sym);
             }
         }
-        let CoreApp { func, args } = expr;
+        
         let f = genvar('f');
 
-        Core::Sel(CoreSel {
-            arg: func,
+        Core::Get(CoreGet {
+            rec: func,
             idx: 0,
             bind: f,
             cont: Box::new(Core::App(CoreApp {
@@ -66,25 +68,104 @@ impl Visitor for ClosConv {
         Core::Halt(arg)
     }
 
-    /*
-        let foo(x,y,...,z) =
-            bar; in
-        baz
-
-        =======> becomes =======>
-
-        let foo(c,x,y,...,z) = 
-            select c[0] -> v1;
-            ...
-            select c[n] -> vn;
-            bar; in
-        record { foo, v1, ..., vn } -> foo;
-        baz
-    */
-
     fn visit_let(&mut self, expr: CoreLet) -> Core {
+        /*
+            let foo(x,y,...,z) =
+                bar; in
+            baz
+
+            =======> becomes =======>
+
+            let f(c,x,y,...,z) = 
+                get c[0] -> v0;
+                ...
+                get c[n] -> vn;
+                bar; in
+            record(n) -> foo
+            set foo[0] := v0
+            ...
+            set foo[n] := vn
+            baz
+
+            where c and f are generated variables
+        */
+
+        let CoreLet { decl, cont } = expr;
+
+        let CoreDecl { func, mut args, body } = decl;
+
+        let c = genvar('c');
+        let f = genvar('f');
+
+        let body = Box::new(self.walk_cexpr(*body));
+        for arg in &args {
+            self.freevars.remove(arg);
+        }
+
+        // record all freevar at this point for later use
+        let freevarvec : Vec<Symbol> = self.freevars.iter()
+            .copied().collect();
+
+        let body = freevarvec.iter()
+            .copied().enumerate()
+            .fold(
+                body,
+                |cont, (idx, bind)| {
+                    Box::new(Core::Get(CoreGet {
+                        rec: Atom::Var(c),
+                        idx,
+                        bind,
+                        cont,
+                    }))
+                }
+            );
         
-        let CoreLet { decls, cont: body } = expr;
+        args.insert(0, c);
+        let decl = CoreDecl {
+            func: f,
+            args,
+            body,
+        };
+
+        let cont = Box::new(self.walk_cexpr(*cont));
+        self.freevars.remove(&f);
+        
+        let cont = [f].iter()
+            .chain(freevarvec.iter())
+            .map(|sym| Atom::Var(*sym))
+            .enumerate()
+            .fold(
+                cont,
+                |cont, (idx, arg)| {
+                    Box::new(Core::Set(CoreSet {
+                        rec: Atom::Var(func),
+                        idx,
+                        arg,
+                        cont,
+                    }))
+                },
+            );
+
+        let cont = Box::new(Core::Rec(CoreRec {
+            // for each freevar and function itself
+            size: freevarvec.len() + 1,
+            bind: func,
+            cont,
+        }));
+
+        Core::Let(CoreLet {
+            decl,
+            cont,
+        })
+    }
+
+    fn visit_fix(&mut self, expr: CoreFix) -> Core {
+        todo!()
+        /*
+            todo!
+        
+
+        let CoreFix { decls, cont: body } = expr;
         
         let c = genvar('c');
 
@@ -102,8 +183,8 @@ impl Visitor for ClosConv {
                     .fold(
                         *body,
                         |acc,(i,x)| {
-                            Core::Sel(CoreSel {
-                                arg: Atom::Var(c),
+                            Core::Get(CoreGet {
+                                rec: Atom::Var(c),
                                 idx: i,
                                 bind: x,
                                 cont: Box::new(acc),
@@ -123,7 +204,7 @@ impl Visitor for ClosConv {
         // todo: support mutual recursive later
         let wrongbind = decls[0].func;
 
-        Core::Let(CoreLet {
+        Core::Fix(CoreFix {
             decls,
             cont: Box::new(Core::Rec(CoreRec {
                 flds: [Atom::Var(wrongbind)].into_iter()
@@ -134,6 +215,8 @@ impl Visitor for ClosConv {
                 cont: body,
             })),
         })
+        */
+        
     }
 
     fn visit_opr(&mut self, expr: CoreOpr) -> Core {

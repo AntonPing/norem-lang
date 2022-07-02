@@ -65,7 +65,7 @@ pub fn cps_trans(
             // eliminate the lambda and transform to let-binding instead
             // and fill the hole with the function we just defined
             Core::Let(CoreLet {
-                decls: vec![CoreDecl{
+                decl: CoreDecl{
                     func: f,
                     args: [k].iter()
                         .chain(args.iter())
@@ -76,7 +76,7 @@ pub fn cps_trans(
                             args: vec![Atom::Var(t)],
                         })
                     ))),
-                }],
+                },
                 cont: Box::new(Core::Tag(
                     Tag::SubstAtom(bind0,Atom::Var(f)),cont0)),
             })
@@ -199,11 +199,11 @@ pub fn cps_trans(
             [(func.deref(), &f)].into_iter()
                 .chain(args.iter().zip(ts.iter()))
                 .fold(Core::Let(CoreLet {
-                        decls: vec![CoreDecl {
+                        decl: CoreDecl {
                             func: r,
                             args: vec![bind0],
                             body: cont0,
-                        }],
+                        },
                         cont: Box::new(Core::App(CoreApp {
                             func: Atom::Var(f),
                             args: [r].iter()
@@ -212,8 +212,9 @@ pub fn cps_trans(
                                 .collect(),
                         }))
                     }),
-                    |acc, (expr, bind)| {
-                        cps_trans(expr, *bind, Box::new(acc))
+                    |cont, (expr, bind)| {
+                        cps_trans(expr, *bind, 
+                            Box::new(cont))
                     }
                 )
             
@@ -243,7 +244,7 @@ pub fn cps_trans(
                 end
             */
 
-            Core::Let(CoreLet {
+            Core::Fix(CoreFix {
                 decls: decls.iter()
                     .filter_map(|decl| {
                         if let Decl::Val(decl) = decl {
@@ -299,15 +300,15 @@ fn cps_trans_test() {
     let res = parse_program(&mut par);
     if let Ok(res) = res {
         println!("\n{res}");
-        let cexpr = cps_trans_top(&res);
-        println!("\n{}", cexpr);
+        let expr = cps_trans_top(&res);
+        println!("\n{}", expr);
 
         let mut reduce = super::opt1::Opt1Reduce::new();
-        let cexpr = reduce.walk_cexpr(cexpr);
-        println!("\n{}", cexpr);
+        let expr = reduce.walk_cexpr(expr);
+        println!("\n{}", expr);
 
-        let cexpr = super::opt1::opt_level1(cexpr);
-        println!("\n{}", cexpr);
+        let expr = super::opt1::opt_level1(expr);
+        println!("\n{}", expr);
     } else {
         par.print_err();
     }

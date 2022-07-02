@@ -265,12 +265,29 @@ impl Printer {
 
     pub fn print_tag(&mut self, f: &mut fmt::Formatter, tag: &Tag) -> fmt::Result {
         match tag {
-            Tag::SubstAtom(_, _) => write!(f,"{tag:?}"),
-            Tag::SubstApp(_) => write!(f,"{tag:?}"),
-            Tag::VarAlloc(x) => write!(f,"alloc {x}"),
-            Tag::VarFree(x) => write!(f,"free {x}"),
-            Tag::VarFreeEnd(xs) => write!(f,"free end {xs:?}"),
-            _ => write!(f,"<tag>"),
+            Tag::SubstAtom(_, _) => {
+                write!(f,"{tag:?}")
+            }
+            Tag::SubstApp(_) => {
+                write!(f,"{tag:?}")
+            }
+            Tag::VarFree(xs) => {
+                write!(f,"free {{")?;
+                for x in xs {
+                    write!(f, "{x},")?;
+                }
+                write!(f, "}}")
+            }
+            Tag::VarFreeAfter(xs) => {
+                write!(f,"free after {{")?;
+                for x in xs {
+                    write!(f, "{x},")?;
+                }
+                write!(f, "}}")
+            }
+            _ => {
+                write!(f,"<unkown tag>")
+            }
         }
     }
 
@@ -286,19 +303,26 @@ impl Printer {
                 }
                 write!(f,")")
             }
-            Core::Let(CoreLet { decls, cont: body }) => {
+            Core::Let(CoreLet { decl, cont }) => {
+                write!(f,"let ")?;
+                self.print_core_decl(f, decl)?;
+                write!(f," in")?;
+                self.newline(f)?;
+                self.print_core(f, cont)
+            }
+            Core::Fix(CoreFix { decls, cont }) => {
                 if decls.is_empty() {
-                    write!(f, "let (empty) in ")?;
+                    write!(f, "letrec (empty) in ")?;
                     self.newline(f)?;
-                    self.print_core(f, body)
+                    self.print_core(f, cont)
                 } else if decls.len() == 1 {
-                    write!(f,"let ")?;
+                    write!(f,"letrec ")?;
                     self.print_core_decl(f, &decls[0])?;
                     write!(f," in")?;
                     self.newline(f)?;
-                    self.print_core(f, body)
+                    self.print_core(f, cont)
                 } else {
-                    write!(f,"let ")?;
+                    write!(f,"letrec ")?;
                     self.indent(2);
                     for decl in decls {
                         self.newline(f)?;
@@ -307,7 +331,7 @@ impl Printer {
                     self.dedent_newline(f, 2)?;
                     write!(f," in")?;
                     self.indent_newline(f, 2)?;
-                    self.print_core(f, body)?;
+                    self.print_core(f, cont)?;
                     self.dedent_newline(f, 2)?;
                     write!(f, "end")
                 }
@@ -332,17 +356,18 @@ impl Printer {
                 self.dedent_newline(f, 2)?;
                 write!(f, "end")
             }
-            Core::Rec(CoreRec { flds, bind, cont }) => {
-                write!(f,"record {{")?;
-                for fld in flds {
-                    write!(f, " {fld}")?;
-                }
-                write!(f," }} -> {bind}")?;
+            Core::Rec(CoreRec { size, bind, cont }) => {
+                write!(f,"record[{size}] -> {bind}")?;
                 self.newline(f)?;
                 self.print_core(f, cont)
             }
-            Core::Sel(CoreSel { arg, idx, bind, cont }) => {
-                write!(f,"select {arg}[{idx}] -> {bind}")?;
+            Core::Set(CoreSet { rec, idx, arg, cont }) => {
+                write!(f,"set {rec}[{idx}] := {arg}")?;
+                self.newline(f)?;
+                self.print_core(f, cont)
+            }
+            Core::Get(CoreGet { rec, idx, bind, cont }) => {
+                write!(f,"get {rec}[{idx}] -> {bind}")?;
                 self.newline(f)?;
                 self.print_core(f, cont)
             }
@@ -350,13 +375,12 @@ impl Printer {
                 write!(f,"halt({arg})")
             }
             Core::Tag(tag, expr) => {
-                write!(f,"tag{{")?;
+                write!(f,"# ")?;
                 self.print_tag(f, tag)?;
-                write!(f," :")?;
                 self.newline(f)?;
-                self.print_core(f, expr)?;
-                write!(f,"}}")
+                self.print_core(f, expr)
             }
+            
         }
     }
 }

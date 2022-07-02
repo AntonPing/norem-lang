@@ -11,7 +11,6 @@ pub mod reg_alloc;
 pub enum Atom {
     Var(Symbol),
     Glob(Symbol),
-    //Reg(usize),
     Prim(Prim),
     Int(i64),
     Real(f64),
@@ -26,7 +25,6 @@ impl fmt::Display for Atom {
         match self {
             Atom::Var(x) => write!(f,"{x}"),
             Atom::Glob(x) => write!(f,"@{x}"),
-            //Atom::Reg(x) => write!(f,"reg{x}"),
             Atom::Prim(x) => write!(f,"{x}"),
             Atom::Int(x) => write!(f,"{x}"),
             Atom::Real(x) => write!(f,"{x}"),
@@ -40,12 +38,14 @@ impl fmt::Display for Atom {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Core {
     App(CoreApp),
-    Let(CoreLet),
     Opr(CoreOpr),
+    Let(CoreLet),
+    Fix(CoreFix),
     Case(CoreCase),
     //Cond(CoreCond),
     Rec(CoreRec),
-    Sel(CoreSel),
+    Set(CoreSet),
+    Get(CoreGet),
     Halt(Atom),
     Tag(Tag, Box<Core>),
 }
@@ -53,29 +53,16 @@ pub enum Core {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tag {
     SubstAtom(Symbol, Atom),
+    SubstSetGet(Symbol,usize,Atom),
     SubstApp(CoreDecl),
-    VarAlloc(Symbol),
-    VarFree(Symbol),
-    VarFreeEnd(Vec<Symbol>),
+    VarFree(Vec<Symbol>),
+    VarFreeAfter(Vec<Symbol>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CoreApp {
     pub func: Atom,
     pub args: Vec<Atom>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct CoreDecl {
-    pub func: Symbol,
-    pub args: Vec<Symbol>,
-    pub body: Box<Core>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct CoreLet {
-    pub decls: Vec<CoreDecl>,
-    pub cont: Box<Core>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -87,6 +74,26 @@ pub struct CoreOpr {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct CoreDecl {
+    pub func: Symbol,
+    pub args: Vec<Symbol>,
+    pub body: Box<Core>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CoreLet {
+    pub decl: CoreDecl,
+    pub cont: Box<Core>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CoreFix {
+    pub decls: Vec<CoreDecl>,
+    pub cont: Box<Core>,
+}
+
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct CoreCase {
     pub arg: Atom,
     pub brs: Vec<Core>, 
@@ -94,14 +101,22 @@ pub struct CoreCase {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CoreRec {
-    pub flds: Vec<Atom>,
+    pub size: usize,
     pub bind: Symbol,
     pub cont: Box<Core>, 
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct CoreSel {
-    pub arg: Atom,
+pub struct CoreSet {
+    pub rec: Atom,
+    pub idx: usize,
+    pub arg: Atom, 
+    pub cont: Box<Core>, 
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CoreGet {
+    pub rec: Atom,
     pub idx: usize,
     pub bind: Symbol,
     pub cont: Box<Core>, 

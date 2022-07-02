@@ -1,6 +1,5 @@
 use std::collections::{HashSet, HashMap};
 
-
 use super::*;
 use crate::symbol::*;
 use super::visitor::*;
@@ -11,115 +10,88 @@ use super::visitor::*;
 
 pub struct AllocScan {
     freevars: HashSet<Symbol>,
+    newfree: Vec<Symbol>,
 }
 
 impl AllocScan {
     pub fn new() -> AllocScan {
         AllocScan {
             freevars: HashSet::new(),
+            newfree: Vec::new(),
         }
     }
     pub fn run(expr: Core) -> Core {
         let mut ctx = AllocScan::new();
         ctx.walk_cexpr(expr)
     }
+    pub fn drain_newfree(&mut self) -> Vec<Symbol> {
+        self.newfree.drain(0..).collect()
+    }
 }
 
-impl Visitor for AllocScan {
+impl VisitorDownTop for AllocScan {
+
+    fn visit_var_use(&mut self, sym: Symbol) -> Symbol {
+        if !self.freevars.contains(&sym) {
+            self.freevars.insert(sym);
+            self.newfree.push(sym);
+        }
+        sym
+    }
+
     fn visit_app(&mut self, expr: CoreApp) -> Core {
-
-
-        let syms = [expr.func].iter()
-            .chain(expr.args.iter())
-            .filter_map(|atom| {
-                if let Atom::Var(sym) = atom {
-                    if !self.freevars.contains(sym) {
-                        self.freevars.insert(*sym);
-                        Some(sym)
-                    } else {
-                        panic!("application is the last commond!");
-                    }
-                } else {
-                    None
-                }
-            })
-            .copied().collect();
-            
-        Core::Tag(Tag::VarFreeEnd(syms),
-            Box::new(Core::App(expr)))
+        let CoreApp { func, args } = expr;
+        let func = self.visit_atom(func);
+        let args = args.into_iter()
+            .map(|arg| self.visit_atom(arg))
+            .collect();
+    
+        let new = self.drain_newfree();
+        if new.is_empty() {
+            Core::App(CoreApp { func, args })
+        } else {
+            Core::Tag(Tag::VarFreeAfter(new), Box::new(
+                Core::App(CoreApp { func, args })))
+        }
     }
 
     fn visit_halt(&mut self, arg: Atom) -> Core {
-        if let Atom::Var(sym) = &arg {
-            if !self.freevars.contains(&sym) {
-                self.freevars.insert(*sym);
-                Core::Tag(Tag::VarFreeEnd(vec![*sym]), 
-                    Box::new(Core::Halt(arg)))
-            } else {
-                Core::Halt(arg)
-            }
-        } else {
+        let arg = self.visit_atom(arg);
+
+        let new = self.drain_newfree();
+        if new.is_empty() {
             Core::Halt(arg)
-        }
-        
+        } else {
+            Core::Tag(Tag::VarFreeAfter(new), Box::new(
+                Core::Halt(arg)))
+        }        
     }
 
     fn visit_opr(&mut self, expr: CoreOpr) -> Core {
         let CoreOpr { prim, args, bind, cont } = expr;
-
         let cont = Box::new(self.walk_cexpr(*cont));
-        let mut tagvec = Vec::new();
         
-        for arg in &args {
-            if let Atom::Var(sym) = arg {
-                if !self.freevars.contains(&sym) {
-                    self.freevars.insert(*sym);
-                    tagvec.push(Tag::VarFree(*sym));
-                }
-            }
-        }
-
-        if self.freevars.contains(&bind) {
-            self.freevars.remove(&bind);
-            tagvec.push(Tag::VarAlloc(bind));
-        } else {
-            panic!("a variable that never used! it should be eliminated after opt1 pass!");
-        }
-
-        let cont = tagvec.into_iter()
-            .fold(cont,
-                |cont,tag| Box::new(Core::Tag(tag, cont)));
         
-        Core::Opr(CoreOpr { prim, args, bind, cont })
-    }
-    
-    fn visit_let(&mut self, expr: CoreLet) -> Core {
-        // we assume there are no free variables in each decl
-        // because they are eliminated by clos_conv pass
-
-        let CoreLet { decls, cont } = expr;
-
-        let cont = Box::new(self.walk_cexpr(*cont));
-
-        let decls = decls.into_iter()
-            .map(|decl| {
-                let CoreDecl { func, args, body } = decl;
-                let body = Box::new(self.walk_cexpr(*body));
-                let body = args.iter()
-                    .fold(body, |body, arg| {
-                        if self.freevars.contains(&arg) {
-                            Box::new(Core::Tag(Tag::VarAlloc(*arg), body))
-                        } else {
-                            // argument never used
-                            body
-                        }
-                    });
-                CoreDecl { func, args, body }
-            })
+        
+        
+        let args = args.into_iter()
+            .map(|arg| self.visit_atom(arg))
             .collect();
+        let bind = self.visit_var_def(bind);
 
-
-        Core::Let(CoreLet { decls, cont })
+        let new = self.drain_newfree();
+        if new.is_empty() {
+            Core::Opr(CoreOpr { prim, args, bind, cont })
+        } else {
+            Core::Opr(CoreOpr {
+                prim,
+                args,
+                bind,
+                cont: Box::new(Core::Tag(
+                    Tag::VarFree(new),cont)),
+            })
+            
+        }
     }
 }
 
@@ -143,56 +115,71 @@ impl RegAlloc {
     }
 }
 
-impl Visitor for RegAlloc {
+impl VisitorTopDown for RegAlloc {
+
+    fn visit_var_def(&mut self, sym: Symbol) -> Symbol {
+        if let Some(n) = self.pool.pop() {
+            self.map.insert(sym, n);
+            reg(n)
+        } else {
+            let old = self.maxreg;
+            self.map.insert(sym, old);
+            self.maxreg += 1;
+            reg(old)
+        }
+    }
+
+    fn visit_var_use(&mut self, sym: Symbol) -> Symbol {
+        if let Some(n) = self.map.get(&sym) {
+            reg(*n)
+        } else {
+            sym
+        }
+    }
 
     fn visit_atom(&mut self, atom: Atom) -> Atom {
         if let Atom::Var(sym) = atom {
             if let Some(n) = self.map.get(&sym) {
                 Atom::Var(reg(*n))
             } else {
-                //panic!("{sym} not fount in context!");
-                Atom::Var(sym) // for testing, this should be permitted!
+                Atom::Glob(sym)
             }
-            
         } else {
             atom
         }
     }
-    fn visit_app(&mut self, expr: CoreApp) -> Core {
-        let CoreApp { func, args } = expr;
-        let func = self.visit_atom(func);
 
-        let args = args.into_iter()
-            .map(|arg| self.visit_atom(arg))
+    fn visit_decl(&mut self, decl: CoreDecl) -> CoreDecl {
+        let CoreDecl { func, args, body } = decl;
+        // let func = self.visit_var_def(func);
+        let args = args.iter()
+            .map(|arg| self.visit_var_def(*arg))
             .collect();
-        
-        Core::App(CoreApp { func, args })
+        let body = Box::new(self.walk_cexpr(*body));
+        CoreDecl { func, args, body }
     }
 
-    fn visit_halt(&mut self, arg: Atom) -> Core {
-        Core::Halt(self.visit_atom(arg))
+    fn visit_let(&mut self, expr: CoreLet) -> Core {
+        // todo: some change
+        let CoreLet { decl, cont } = expr;
+        let decl = self.visit_decl(decl);
+        let cont = Box::new(self.walk_cexpr(*cont));
+        Core::Let(CoreLet { decl, cont })
     }
 
     fn visit_tag(&mut self, tag: Tag, cont: Box<Core>) -> Core {
         match tag {
-            Tag::VarAlloc(sym) => {
-                if let Some(reg) = self.pool.pop() {
-                    self.map.insert(sym, reg);
-                } else {
-                    self.map.insert(sym, self.maxreg);
-                    self.maxreg += 1;
+            Tag::VarFree(syms) => {
+                for sym in syms {
+                    if let Some(reg) = self.map.remove(&sym) {
+                        self.pool.push(reg);
+                    } else {
+                        //panic!("{sym} not fount in context!");
+                    }
                 }
                 self.walk_cexpr(*cont)
             }
-            Tag::VarFree(sym) => {
-                if let Some(reg) = self.map.remove(&sym) {
-                    self.pool.push(reg);
-                } else {
-                    //panic!("{sym} not fount in context!");
-                }
-                self.walk_cexpr(*cont)
-            }
-            Tag::VarFreeEnd(syms) => {
+            Tag::VarFreeAfter(syms) => {
                 let cont = self.walk_cexpr(*cont);
                 for sym in syms {
                     if let Some(reg) = self.map.remove(&sym) {
@@ -208,27 +195,6 @@ impl Visitor for RegAlloc {
             }
         }
     }
-
-    fn visit_opr(&mut self, expr: CoreOpr) -> Core {
-        let CoreOpr { prim, args, bind, cont } = expr;
-
-        let args = args.into_iter()
-            .map(|arg| self.visit_atom(arg))
-            .collect();
-
-        let bind = if let Some(n) = self.map.get(&bind) {
-            reg(*n)
-        } else {
-            //panic!("{sym} not fount in context!");
-            bind // for testing, this should be permitted!
-        };
-        
-        let cont = Box::new(self.walk_cexpr(*cont));
-
-        Core::Opr(CoreOpr { prim, args, bind, cont })
-
-    }
-
 
 }
 
