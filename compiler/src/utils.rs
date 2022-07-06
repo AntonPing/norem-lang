@@ -4,24 +4,33 @@ use std::default::Default;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
 
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Position {
-    pub pos: usize,
     pub row: usize,
     pub col: usize,
+    pub abs: usize,
 }
 
 impl Position {
-    pub fn new(pos: usize, row: usize, col: usize) -> Position {
-        Position { pos, row, col }
+    pub fn new(
+        col: usize,
+        row: usize,
+        abs: usize,
+    ) -> Position {
+        Position { row, col, abs }
+    }
+    pub fn dummy() -> Position {
+        Position { row: 0, col: 0, abs: 0 }
     }
 }
 
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}:{:?}({:?})", self.row, self.col, self.pos)
+        write!(f, "{}:{}({})", self.row, self.col, self.abs)
     }
 }
+
 
 /// A span in the source, with a start and end location
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Default)]
@@ -33,6 +42,12 @@ pub struct Span {
 impl Span {
     pub fn new(start: Position, end: Position) -> Span {
         Span { start, end }
+    }
+    pub fn dummy() -> Span {
+        Span {
+            start: Position::dummy(),
+            end: Position::dummy(),
+        }
     }
 }
 
@@ -115,6 +130,7 @@ pub fn no_repeat<T: Eq>(vec: Vec<T>) -> bool {
     return true;
 }
 
+/*
 #[derive(Clone, Debug, PartialEq)]
 enum EnvOp<K, V> {
     // has such key, old value covered
@@ -127,7 +143,7 @@ enum EnvOp<K, V> {
     Nothing,
 }
 
-/*
+
 #[derive(Clone, Debug)]
 pub struct Env<K,V> {
     context: HashMap<K,V>,
@@ -196,7 +212,7 @@ impl<K,V> Env<K,V> where K: Eq + Hash + Clone {
         }
     }
 }
-*/
+
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LogLevel {
@@ -253,7 +269,6 @@ impl Message {
         self.other.push(msg);
         self
     }
-
     pub fn lines(&self) -> std::ops::Range<usize> {
         let mut range = std::ops::Range {
             start: self.span.start.row,
@@ -271,3 +286,4 @@ impl Message {
         range
     }
 }
+    */

@@ -70,10 +70,7 @@ impl VisitorDownTop for AllocScan {
     fn visit_opr(&mut self, expr: CoreOpr) -> Core {
         let CoreOpr { prim, args, bind, cont } = expr;
         let cont = Box::new(self.walk_cexpr(*cont));
-        
-        
-        
-        
+
         let args = args.into_iter()
             .map(|arg| self.visit_atom(arg))
             .collect();
@@ -152,10 +149,22 @@ impl VisitorTopDown for RegAlloc {
     fn visit_decl(&mut self, decl: CoreDecl) -> CoreDecl {
         let CoreDecl { func, args, body } = decl;
         // let func = self.visit_var_def(func);
+
+        // new enviroment
+        let old_pool: Vec<usize> = self.pool.drain(0..).collect();
+        let old_maxreg = self.maxreg;
+        self.maxreg = 0;
+
+        // visit
         let args = args.iter()
             .map(|arg| self.visit_var_def(*arg))
             .collect();
         let body = Box::new(self.walk_cexpr(*body));
+        
+        // recover old enviroment
+        self.pool = old_pool.into_iter().collect();
+        self.maxreg = old_maxreg;
+
         CoreDecl { func, args, body }
     }
 
@@ -195,7 +204,6 @@ impl VisitorTopDown for RegAlloc {
             }
         }
     }
-
 }
 
 #[test]

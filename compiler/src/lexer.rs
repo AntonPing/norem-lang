@@ -1,3 +1,4 @@
+use core::slice;
 use std::fmt;
 use std::iter::Peekable;
 use std::str::Chars;
@@ -7,19 +8,27 @@ use crate::utils::*;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Token {
+    // Parens
     LParen,
     RParen,
     LBracket,
     RBracket,
     LBrace,
     RBrace,
-
+    
+    // Delims
     Comma,
     Semicolon,
     Bar,
     Wild,
     Equal,
+    
+    // Fixities
+    Infixl,
+    Infixr,
+    Nonfix,
 
+    // Keywords
     Let,
     In,
     End,
@@ -32,19 +41,24 @@ pub enum Token {
     EArrow,
     Arrow,
 
+    // Literals
     Int(i64),
     Real(f64),
     Bool(bool),
     Char(char),
     Str(Symbol),
 
+    // Symbols
     LitType(Symbol),
-    Prim(Symbol),
     Var(Symbol),
     UpVar(Symbol),
+    Prim(Symbol),
+    Opr(Symbol),
 
+    // Special
     StartOfFile,
     EndOfFile,
+    BadToken(&'static str),
 }
 
 impl fmt::Display for Token {
@@ -59,12 +73,14 @@ impl fmt::Display for Token {
             Token::Prim(x) => write!(f, "Opr({x})"),
             Token::Var(x) => write!(f, "Var({x})"),
             Token::UpVar(x) => write!(f, "UpVar({x})"),
+            Token::Opr(x) => write!(f, "Opr({x})"),
+            Token::BadToken(msg) => write!(f, "BadToken\n| {msg}"),
             other => write!(f, "{other:?}"),
         }
     }
 }
 
-pub fn is_reserved(str: &str) -> Option<Token> {
+pub fn as_keyword(str: &str) -> Option<Token> {
     let tok = match str {
         "fn" => Token::Fn,
         "let" => Token::Let,
@@ -81,20 +97,34 @@ pub fn is_reserved(str: &str) -> Option<Token> {
         "Real" => Token::LitType(S_TY_REAL),
         "Bool" => Token::LitType(S_TY_BOOL),
         "Char" => Token::LitType(S_TY_CHAR),
-        _ => {
-            return None;
-        }
+        _ => { return None; }
     };
     Some(tok)
+}
+
+pub fn as_primitive(str: &str) -> Option<Token> {
+    let tok = match str {
+        "_iadd" => Token::Prim(S_IADD),
+        "_isub" => Token::Prim(S_ISUB),
+        "_imul" => Token::Prim(S_IMUL),
+        "_idiv" => Token::Prim(S_IDIV),
+        "_ineg" => Token::Prim(S_INEG),
+        _ => { return None; }
+    };
+    Some(tok)
+}
+
+pub fn is_opr_char(ch: char) -> bool {
+    ":!#$%&*+./<=>?@\\^|-~".contains(ch)
 }
 
 pub struct Lexer<'src> {
     source: &'src str,
     stream: Peekable<Chars<'src>>,
     is_end: bool,
-    pos: usize,
     row: usize,
     col: usize,
+    abs: usize,
 }
 
 impl<'src> Lexer<'src> {
@@ -103,14 +133,18 @@ impl<'src> Lexer<'src> {
             source: s,
             stream: s.chars().peekable(),
             is_end: false,
-            pos: 0,
             row: 0,
             col: 0,
+            abs: 0,
         }
     }
 
     fn position(&self) -> Position {
-        Position::new(self.pos, self.row, self.col)
+        Position::new(self.col, self.row, self.abs)
+    }
+
+    fn get_slice(&self, start: Position, end: Position) -> &'src str {
+        &self.source[start.abs .. end.abs]
     }
 
     fn peek_char(&mut self) -> Option<char> {
@@ -120,7 +154,7 @@ impl<'src> Lexer<'src> {
 
     fn next_char(&mut self) -> Option<char> {
         let ch = self.stream.next()?;
-        self.pos += 1;
+        self.abs += 1;
         if ch == '\n' {
             self.row += 1;
             self.col = 0;
@@ -129,7 +163,8 @@ impl<'src> Lexer<'src> {
         }
         Some(ch)
     }
-
+    
+    //#[allow(dead_code)]
     fn peek_satisfy(&mut self, f: fn(char) -> bool) -> Option<char> {
         let ch = self.peek_char()?;
         if f(ch) {
@@ -158,16 +193,13 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    fn comment_block(&mut self) -> Result<(), String> {
+    fn comment_block(&mut self) -> Result<(), ()> {
+        // an automat of 3 states and a variable "level"
         let mut level = 1;
-
-        // an automat of 3 states
         let mut state = 0;
 
         while level > 0 {
-            let ch = self
-                .next_char()
-                .ok_or("comment block not closed!".to_string())?;
+            let ch = self.next_char().ok_or(())?;
 
             match state {
                 0 => match ch {
@@ -200,7 +232,16 @@ impl<'src> Lexer<'src> {
         Ok(())
     }
 
-    pub fn next_token(&mut self) -> Result<(Token, Span), String> {
+    pub fn lex_opr(&mut self, start: Position) -> (Token, Span) {
+        self.skip_satisfy(is_opr_char);
+        let end = self.position();
+        let span = Span::new(start, end);
+        let slice = self.get_slice(start, end);
+        let sym = newvar(slice);
+        (Token::Opr(sym), span)
+    }
+
+    pub fn next_token(&mut self) -> (Token, Span) {
         // skip all whitespaces
         self.skip_satisfy(|ch| ch.is_ascii_whitespace());
 
@@ -215,148 +256,177 @@ impl<'src> Lexer<'src> {
                 }
                 Some('*') => {
                     self.next_char();
-                    self.comment_block()?;
-                    self.next_token()
+                    if self.comment_block().is_ok() {
+                        self.next_token()
+                    } else {
+                        let end = self.position();
+                        let span = Span::new(end, end);
+                        (Token::BadToken("comment block not closed!"), span)
+                    }
                 }
-                Some(_) => {
+                _ => {
+                    self.lex_opr(start)
+                }
+            },
+            Some('_') => match self.peek_char() {
+                Some(ch) if ch.is_alphabetic() => {
+                    self.next_char();
+                    self.skip_satisfy(|ch| ch.is_alphabetic());
+                    
                     let end = self.position();
-                    Ok((Token::Prim(S_IDIV), Span::new(start, end)))
+                    let span = Span::new(start,end);
+                    let slice = self.get_slice(start, end);
+
+                    if let Some(tok) = as_primitive(slice) {
+                        (tok, span)
+                    } else {
+                        (Token::BadToken(
+                            "no such a primitive!"
+                        ), span)
+                    }
                 }
-                None => Err("lexing failed!".to_string()),
+                _ => {
+                    let end = self.position();
+                    (Token::Wild, Span::new(start, end))
+                }
             },
             Some('=') => match self.peek_char() {
                 Some('>') => {
                     self.next_char();
                     let end = self.position();
-                    Ok((Token::EArrow, Span::new(start, end)))
+                    (Token::EArrow, Span::new(start, end))
                 }
                 _ => {
                     let end = self.position();
-                    Ok((Token::Equal, Span::new(start, end)))
+                    (Token::Equal, Span::new(start, end))
                 }
             },
             Some('-') => match self.peek_char() {
                 Some('>') => {
                     self.next_char();
                     let end = self.position();
-                    Ok((Token::Arrow, Span::new(start, end)))
+                    (Token::Arrow, Span::new(start, end))
                 }
                 _ => {
-                    let end = self.position();
-                    Ok((Token::Prim(S_ISUB), Span::new(start, end)))
+                    self.lex_opr(start)
                 }
             },
-            Some('+') => {
-                let end = self.position();
-                Ok((Token::Prim(S_IADD), Span::new(start, end)))
-            }
-            Some('*') => {
-                let end = self.position();
-                Ok((Token::Prim(S_IMUL), Span::new(start, end)))
-            }
             Some('(') => {
                 let end = self.position();
-                Ok((Token::LParen, Span::new(start, end)))
+                (Token::LParen, Span::new(start, end))
             }
             Some(')') => {
                 let end = self.position();
-                Ok((Token::RParen, Span::new(start, end)))
+                (Token::RParen, Span::new(start, end))
             }
             Some('[') => {
                 let end = self.position();
-                Ok((Token::LBracket, Span::new(start, end)))
+                (Token::LBracket, Span::new(start, end))
             }
             Some(']') => {
                 let end = self.position();
-                Ok((Token::RBracket, Span::new(start, end)))
+                (Token::RBracket, Span::new(start, end))
             }
             Some('{') => {
                 let end = self.position();
-                Ok((Token::LBrace, Span::new(start, end)))
+                (Token::LBrace, Span::new(start, end))
             }
             Some('}') => {
                 let end = self.position();
-                Ok((Token::RBrace, Span::new(start, end)))
+                (Token::RBrace, Span::new(start, end))
             }
             Some(',') => {
                 let end = self.position();
-                Ok((Token::RBrace, Span::new(start, end)))
+                (Token::RBrace, Span::new(start, end))
             }
             Some(';') => {
                 let end = self.position();
-                Ok((Token::Semicolon, Span::new(start, end)))
+                (Token::Semicolon, Span::new(start, end))
             }
             Some('|') => {
                 let end = self.position();
-                Ok((Token::Bar, Span::new(start, end)))
+                (Token::Bar, Span::new(start, end))
             }
-            Some('_') => {
-                let end = self.position();
-                Ok((Token::Wild, Span::new(start, end)))
+            Some(ch) if is_opr_char(ch) => {
+                self.lex_opr(start)
             }
-            
-            Some(x) if x.is_ascii_alphabetic() => {
-                let upper = x.is_uppercase();
+            Some(ch) if ch.is_ascii_alphabetic() => {
+                let upper = ch.is_uppercase();
 
-                while let Some(x) = self.peek_char() {
-                    if x.is_ascii_alphanumeric() {
-                        self.next_char();
-                    } else {
-                        break;
-                    }
-                }
+                self.skip_satisfy(|ch| ch.is_alphanumeric());
 
                 let end = self.position();
-                let slice = &self.source[start.pos..end.pos];
+                let span = Span::new(start, end);
+                let slice = self.get_slice(start, end);
 
-                let tok;
-                if let Some(res) = is_reserved(slice) {
-                    tok = res;
+                if let Some(res) = as_keyword(slice) {
+                    (res, span)
                 } else {
                     let sym = newvar(slice);
                     if upper {
-                        tok = Token::UpVar(sym);
+                        (Token::UpVar(sym), span)
                     } else {
-                        tok = Token::Var(sym);
+                        (Token::Var(sym), span)
                     }
                 }
-
-                Ok((tok, Span::new(start, end)))
             }
 
-            Some(x) if x.is_ascii_digit() => {
+            Some(ch) if ch.is_ascii_digit() => {
                 self.skip_satisfy(|ch| ch.is_ascii_digit());
 
                 if self.peek_char() != Some('.') {
                     let end = self.position();
-                    let val: i64 = self.source[start.pos..end.pos].parse().unwrap();
-                    return Ok((Token::Int(val), Span::new(start, end)));
+                    let span = Span::new(start, end);
+                    let slice = self.get_slice(start, end);
+                    let val: i64 = slice.parse().unwrap();
+                    return (Token::Int(val), span);
                 } else {
                     self.next_char();
                 }
 
                 // fractional part
-                if let Some(_) = self.next_satisfy(|ch| ch.is_ascii_digit()) {
+                if self.next_satisfy(|ch| ch.is_ascii_digit()).is_some() {
                     // at least one digit
                     self.skip_satisfy(|ch| ch.is_ascii_digit());
                 } else {
-                    return Err("Real number without fractional part!".to_string());
+                    let end = self.position();
+                    let span = Span::new(start, end);
+                    // ignore all char until a whitespace
+                    self.skip_satisfy(|ch| !ch.is_ascii_whitespace());
+                    
+                    return (Token::BadToken(
+                        "fractional part needs at least one digit!"
+                    ), span);
                 }
 
                 let end = self.position();
-                let val: f64 = self.source[start.pos..end.pos].parse().unwrap();
-                Ok((Token::Real(val), Span::new(start, end)))
+                let span = Span::new(start, end);
+                let slice = self.get_slice(start, end);
+                let val: f64 = slice.parse().unwrap();
+
+                (Token::Real(val), span)
+            }
+            Some(_) => {
+                self.next_char();
+                let end = self.position();
+                let span = Span::new(start, end);
+                // ignore all char until a whitespace
+                self.skip_satisfy(|ch| !ch.is_ascii_whitespace());
+                (Token::BadToken(
+                    "unknown character!"
+                ), span)
             }
             None => {
+                let end = self.position();
+                let span = Span::new(start, end);
+
                 if self.is_end {
-                    return Err("file is ended!".to_string());
+                    (Token::BadToken("file ended!"), span)
                 } else {
                     self.is_end = true;
+                    (Token::EndOfFile, span)
                 }
-                let end = self.position();
-                Ok((Token::EndOfFile, Span::new(start, end)))
             }
-            Some(ch) => Err(format!("lexing failed at {ch}!")),
         }
     }
 }
@@ -378,7 +448,12 @@ fn lexer_test() {
 
     let mut lex = Lexer::new(string);
 
-    while let Ok(tok) = lex.next_token() {
-        println!("{} {}", tok.0, tok.1);
+    loop {
+        let (tok,span) = lex.next_token();
+        
+        println!("{} {}", tok, span);
+        if tok == Token::EndOfFile {
+            break;   
+        }
     }
 }

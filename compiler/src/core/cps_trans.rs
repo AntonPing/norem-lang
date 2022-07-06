@@ -275,6 +275,9 @@ pub fn cps_trans(
         Expr::Case(ExprCase { expr, rules, span: _ }) => {
             todo!()
         }
+        _ => {
+            todo!()
+        }
     }
 }
 

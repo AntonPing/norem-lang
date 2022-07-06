@@ -6,6 +6,8 @@ pub mod cps_trans;
 pub mod opt1;
 pub mod clos_conv;
 pub mod reg_alloc;
+pub mod codegen;
+pub mod dump_asm;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Atom {
@@ -124,22 +126,22 @@ pub struct CoreGet {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ByteCode {
-    MkPair,
-    Head,
-    Tail,
 
-    Move(usize, Atom),
-    Swap(usize, usize),
+    Move(Atom, usize),
     Jump(Atom),
-    JumpTrue(Atom),
-    JumpFalse(Atom),
-
-    IAdd(Atom, Atom, Atom),
-    ISub(Atom, Atom, Atom),
-    IMul(Atom, Atom, Atom),
-    IDiv(Atom, Atom, Atom),
-    INeg(Atom, Atom),
-    BNot(Atom, Atom),
     Halt(Atom),
+
+    IAdd(Atom, Atom, usize),
+    ISub(Atom, Atom, usize),
+    IMul(Atom, Atom, usize),
+    IDiv(Atom, Atom, usize),
+    INeg(Atom, usize),
+    BNot(Atom, usize),
+}
+
+pub struct ByteCodeBlock {
+    pub func: Symbol,
+    pub args: usize,
+    pub body: Vec<ByteCode>,
 }
 

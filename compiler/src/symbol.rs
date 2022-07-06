@@ -117,7 +117,7 @@ impl fmt::Display for Symbol {
                 write!(f, "{ch}{n}")
             }
             &Symbol::Reg(n) => {
-                write!(f, "reg{n}")
+                write!(f, "r{n}")
             }
             &Symbol::Str(n) => {
                 write!(f, "{}", table.get_str(n).unwrap())
@@ -154,7 +154,7 @@ macro_rules! globals {
     };
     ($($name:ident),+) => {
         //const BUILTIN: [&'static str; S_TOTAL_GLOBALS];
-        globals!(@step 0usize, $($name,)*);
+        globals!(@step 0 as usize, $($name,)*);
     };
 }
 

@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fmt::write;
 
 use crate::ast::*;
 use crate::core::*;
@@ -18,6 +19,13 @@ impl fmt::Display for Decl {
     }
 }
 
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut pr = Printer::new(50);
+        pr.print_type(f, self)
+    }
+}
+
 impl fmt::Display for Core {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut pr = Printer::new(50);
@@ -25,10 +33,18 @@ impl fmt::Display for Core {
     }
 }
 
-impl fmt::Display for Type {
+
+impl fmt::Display for ByteCode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut pr = Printer::new(50);
-        pr.print_type(f, self)
+        pr.print_bytecode(f, self)
+    }
+}
+
+impl fmt::Display for ByteCodeBlock {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut pr = Printer::new(50);
+        pr.print_bytecode_block(f, self)
     }
 }
 
@@ -148,6 +164,21 @@ impl Printer {
                 write!(f, " = ")?;
                 self.print_type(f, typ)
             }
+            Decl::Opr(decl) => {
+                let DeclOpr { name, fixity, prec, span: _ } = &decl;
+                match fixity {
+                    Fixity::Infixl => {
+                        write!(f, "infixl {name} {prec}")?;
+                    }
+                    Fixity::Infixr => {
+                        write!(f, "infixr {name} {prec}")?;
+                    }
+                    Fixity::Nonfix => {
+                        write!(f, "nonfix {name} {prec}")?;
+                    }
+                }
+                Ok(())
+            }
         }
     }
 
@@ -220,6 +251,9 @@ impl Printer {
                 }
                 self.dedent_newline(f, 2)?;
                 write!(f, "end")
+            }
+            _ => {
+                todo!()
             }
         }
     }
@@ -382,6 +416,57 @@ impl Printer {
             }
             
         }
+    }
+
+    pub fn print_bytecode(
+        &mut self,
+        f: &mut fmt::Formatter,
+        btc: &ByteCode,
+    ) -> fmt::Result {
+
+        match btc {
+            ByteCode::Move(arg1, arg2) => {
+                write!(f,"move {arg1}, r{arg2}")
+            }
+            ByteCode::Jump(arg) => {
+                write!(f,"jump {arg}")
+            }
+            ByteCode::Halt(arg) => {
+                write!(f,"halt {arg}")
+            }
+            ByteCode::IAdd(x, y, z) => {
+                write!(f,"iadd {x}, {y}, {z}")
+            }
+            ByteCode::ISub(x, y, z) => {
+                write!(f,"isub {x}, {y}, {z}")
+            }
+            ByteCode::IMul(x, y, z) => {
+                write!(f,"imul {x}, {y}, {z}")
+            }
+            ByteCode::IDiv(x, y, z) => {
+                write!(f,"idiv {x}, {y}, {z}")
+            }
+            ByteCode::INeg(x, y) => {
+                write!(f,"ineg {x}, {y}")
+            }
+            ByteCode::BNot(x, y) => {
+                write!(f,"bnot {x}, {y}")
+            }  
+        }
+    }
+
+    pub fn print_bytecode_block(
+        &mut self,
+        f: &mut fmt::Formatter,
+        blk: &ByteCodeBlock,
+    ) -> fmt::Result {
+        write!(f, "{}:", blk.func)?;
+        self.indent(2);
+        for btc in &blk.body {
+            self.newline(f)?;
+            self.print_bytecode(f, btc)?;
+        }
+        self.dedent_newline(f, 2)
     }
 }
 

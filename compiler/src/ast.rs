@@ -12,6 +12,8 @@ pub enum Expr {
     App(ExprApp),
     Let(ExprLet),
     Case(ExprCase),
+    Block(ExprBlock),
+    //Rec(Vec<Row<Expr>>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
@@ -83,6 +85,7 @@ pub enum Decl {
     Val(DeclVal),
     Data(DeclData),
     Type(DeclType),
+    Opr(DeclOpr),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -125,6 +128,37 @@ pub struct Rule {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct DeclOpr {
+    pub name: Symbol,
+    pub fixity: Fixity,
+    pub prec: u8,
+    pub span: Span,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum Fixity {
+    Infixl,
+    Infixr,
+    Nonfix,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExprBlock {
+    pub stats: Vec<Statment>, 
+    pub span: Span,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Statment {
+    Let(Symbol,Box<Expr>),
+    Bind(Symbol,Box<Expr>),
+    Ret(Box<Expr>),
+}
+
+
+
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Pattern {
     /// Algebraic datatype constructor, along with binding pattern
     App(Symbol, Vec<Pattern>),
@@ -149,13 +183,19 @@ pub enum LitType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
-    Cons(Symbol),
     Lit(LitType),
     Var(Symbol),
     Arr(Box<Type>, Box<Type>),
-    App(Box<Type>, Box<Type>),
-    //Poly(Vec<Symbol>, Box<Type>),
+    Cons(Symbol, Vec<Type>),
+    Rec(Vec<Row<Type>>),
     Temp(usize),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Row<T> {
+    pub name: Symbol,
+    pub data: Box<T>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
