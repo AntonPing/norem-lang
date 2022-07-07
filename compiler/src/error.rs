@@ -45,7 +45,10 @@ impl Diagnostic {
         }
     }
 
-    pub fn desc<S: Into<String>>(mut self, desc: S) -> Diagnostic {
+    pub fn desc<S: Into<String>>(
+        mut self,
+        desc: S
+    ) -> Diagnostic {
         self.description.push(desc.into());
         self
     }
@@ -67,13 +70,11 @@ impl Diagnostic {
         }
     }
     
-    pub fn minimal(&self, _: &str) -> String {
-        let mut output = format!("{:?}: ", self.level);
-        output.push_str(&self.title);
-        output.push('\n');
+    pub fn minimal(&self, _source: &str) -> String {
+        let mut output = format!(
+            "{:?}: {}\n", self.level, &self.title);
 
         for line in &self.description {
-            output.push_str("  ");
             output.push_str(line);
             output.push('\n');
         }
@@ -81,10 +82,10 @@ impl Diagnostic {
         for anno in &self.annos {
             if anno.span == Span::dummy() {
                 output.push_str(&anno.info);
-                
+                output.push('\n');
             } else {
                 output.push_str(&format!(
-                    "from [line {}: col {}] to [line {} : col {}]\n  {}",
+                    "from [line {}: col {}] to [line {} : col {}]\n{}",
                     anno.span.start.row,
                     anno.span.start.col,
                     anno.span.end.row,
@@ -92,19 +93,15 @@ impl Diagnostic {
                     anno.info,
                 ));
             }
-            output.push('\n');
         }
         output
     }
 
     pub fn verbose(&self, source: &str) -> String {
-        
-        let mut output = format!("{:?}: ", self.level);
-        output.push_str(&self.title);
-        output.push('\n');
+        let mut output = format!(
+            "{:?}: {}\n", self.level, &self.title);
 
         for line in &self.description {
-            output.push_str("  ");
             output.push_str(line);
             output.push('\n');
         }
@@ -115,18 +112,25 @@ impl Diagnostic {
             if anno.span == Span::dummy() {
                 output.push_str(&anno.info);
             } else {
-                let range = std::ops::Range {
-                    start: anno.span.start.row.saturating_sub(1),
+                let row_range = std::ops::Range {
+                    start: anno.span.start.row,
                     end: anno.span.end.row + 1,
                 };
-                let width = (1 + anno.span.end.row).to_string().len();
-                for l in range {
-                    output.push_str(&format!("{:>.*} | {}\n", width, l + 1, text[l]));
-                    if l == anno.span.start.row {
-                        let empty = (0..anno.span.start.col + 3 + width)
+                //println!("range = {:?}",range);
+                let head_width = (1 + anno.span.end.row).to_string().len();
+
+                for row in row_range {
+                    // print header "xxx | ", where xxx is the line number
+                    output.push_str(
+                        &format!("{:>.*} | {}\n",
+                        head_width, row + 1, text[row]
+                    ));
+
+                    if row == anno.span.start.row {
+                        let empty = (0..anno.span.start.col + head_width + 3)
                             .map(|_| ' ')
                             .collect::<String>();
-                        let tilde = (1..anno.span.end.col.saturating_sub(anno.span.start.col))
+                        let tilde = (2..anno.span.end.col.saturating_sub(anno.span.start.col))
                             .map(|_| '~')
                             .collect::<String>();
                         output.push_str(&format!("{}^{}^ {}\n", empty, tilde, anno.info))

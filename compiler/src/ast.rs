@@ -10,10 +10,12 @@ pub enum Expr {
     Var(ExprVar),
     Lam(ExprLam),
     App(ExprApp),
+    // chain will be desugared
+    Chain(ExprChain),
     Let(ExprLet),
     Case(ExprCase),
     Block(ExprBlock),
-    //Rec(Vec<Row<Expr>>),
+    Rec(Vec<Row<Expr>>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
@@ -63,6 +65,13 @@ pub struct ExprLam {
 pub struct ExprApp {
     pub func: Box<Expr>,
     pub args: Vec<Expr>,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExprChain {
+    pub head: Box<Expr>,
+    pub tail: Vec<(Symbol,Expr)>,
     pub span: Span,
 }
 
@@ -144,19 +153,47 @@ pub enum Fixity {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExprBlock {
-    pub stats: Vec<Statment>, 
+    pub stats: Vec<Stat>, 
     pub span: Span,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Statment {
-    Let(Symbol,Box<Expr>),
-    Bind(Symbol,Box<Expr>),
-    Ret(Box<Expr>),
+pub enum Stat {
+    // let foo = bar;
+    Let(StatLet),
+    // let foo <- bar;
+    Bind(StatBind),
+    // bar;
+    Drop(StatDrop),
+    // return foo;
+    Ret(StatRet),
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct StatLet {
+    pub name: Symbol,
+    pub body: Box<Expr>,
+    pub span: Span,
+}
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct StatBind {
+    pub name: Symbol,
+    pub body: Box<Expr>,
+    pub span: Span,
+}
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct StatDrop {
+    pub body: Box<Expr>,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct StatRet {
+    pub body: Box<Expr>,
+    pub span: Span,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Pattern {
@@ -186,7 +223,7 @@ pub enum Type {
     Lit(LitType),
     Var(Symbol),
     Arr(Box<Type>, Box<Type>),
-    Cons(Symbol, Vec<Type>),
+    App(Box<Type>, Box<Type>),
     Rec(Vec<Row<Type>>),
     Temp(usize),
 }

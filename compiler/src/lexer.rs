@@ -37,9 +37,12 @@ pub enum Token {
     Type,
     Case,
     Of,
+    Do,
+    Return,
     Fn,
     EArrow,
     Arrow,
+    BArrow,
 
     // Literals
     Int(i64),
@@ -91,6 +94,8 @@ pub fn as_keyword(str: &str) -> Option<Token> {
         "type" => Token::Type,
         "case" => Token::Case,
         "of" => Token::Of,
+        "do" => Token::Do,
+        "return" => Token::Return,
         "true" => Token::Bool(true),
         "false" => Token::Bool(false),
         "Int" => Token::LitType(S_TY_INT),
@@ -306,6 +311,16 @@ impl<'src> Lexer<'src> {
                     self.next_char();
                     let end = self.position();
                     (Token::Arrow, Span::new(start, end))
+                }
+                _ => {
+                    self.lex_opr(start)
+                }
+            },
+            Some('<') => match self.peek_char() {
+                Some('-') => {
+                    self.next_char();
+                    let end = self.position();
+                    (Token::BArrow, Span::new(start, end))
                 }
                 _ => {
                     self.lex_opr(start)

@@ -169,6 +169,19 @@ impl<'src> Parser<'src> {
         }
     }
 
+    pub fn match_opr(&mut self) -> ParseResult<Symbol> {
+        if let Token::Opr(x) = self.token {
+            self.next()?;
+            Ok(x)
+        } else {
+            Err(Diagnostic::error("Unexpected token")
+                .desc("expected an operator")
+                .desc(format!("but found token {}",self.token))
+                .anno(self.span, "here is the token")
+            )
+        }
+    }
+
     pub fn many<T>(
         &mut self,
         func: ParseFunc<T>,
@@ -212,8 +225,8 @@ impl<'src> Parser<'src> {
 
     pub fn sepby<T>(
         &mut self,
-        func: ParseFunc<T>,
         delim: Token,
+        func: ParseFunc<T>,
     ) -> ParseResult<Vec<T>> {
         let mut vec = Vec::new();
         let pos = self.span.start.abs;
@@ -245,14 +258,14 @@ impl<'src> Parser<'src> {
 
     pub fn sepby1<T>(
         &mut self,
-        func: ParseFunc<T>,
         delim: Token,
+        func: ParseFunc<T>,
     ) -> ParseResult<Vec<T>> {
         match func(self) {
             Ok(res) => {
                 if self.token == delim {
                     self.next()?;
-                    let mut vec = self.sepby(func,delim)?;
+                    let mut vec = self.sepby(delim, func)?;
                     vec.insert(0, res);
                     Ok(vec)
                 } else {
@@ -288,12 +301,13 @@ pub fn parse_expr_lam(p: &mut Parser) -> ParseResult<ExprLam> {
     p.match_token(Token::Fn)?;
     let args = p.many1(|p| p.match_var())?;
     p.match_token(Token::EArrow)?;
-    let body = Box::new(parse_expr_outer(p)?);
+    let body = Box::new(parse_expr_chain(p)?);
 
     let span = p.end(start);
     Ok(ExprLam { args, body, span })
 }
 
+/*
 pub fn parse_expr_app(p: &mut Parser) -> ParseResult<ExprApp> {
     let start = p.start();
 
@@ -305,6 +319,7 @@ pub fn parse_expr_app(p: &mut Parser) -> ParseResult<ExprApp> {
     let span = p.end(start);
     Ok(ExprApp { func, args, span })
 }
+*/
 
 pub fn parse_expr_let(p: &mut Parser) -> ParseResult<ExprLet> {
     let start = p.start();
@@ -312,7 +327,7 @@ pub fn parse_expr_let(p: &mut Parser) -> ParseResult<ExprLet> {
     p.match_token(Token::Let)?;
     let decls = p.many1(parse_decl)?;
     p.match_token(Token::In)?;
-    let body = Box::new(parse_expr_outer(p)?);
+    let body = Box::new(parse_expr_chain(p)?);
     p.match_token(Token::End)?;
 
     let span = p.end(start);
@@ -323,7 +338,7 @@ pub fn parse_expr_case(p: &mut Parser) -> ParseResult<ExprCase> {
     let start = p.start();
 
     p.match_token(Token::Case)?;
-    let expr = Box::new(parse_expr_outer(p)?);
+    let expr = Box::new(parse_expr_chain(p)?);
     p.match_token(Token::Of)?;
     let rules = p.many(parse_rule)?;
     p.match_token(Token::End)?;
@@ -332,15 +347,111 @@ pub fn parse_expr_case(p: &mut Parser) -> ParseResult<ExprCase> {
     Ok(ExprCase { expr, rules, span })
 }
 
-pub fn parse_expr_outer(p: &mut Parser) -> ParseResult<Expr> {
+pub fn parse_expr_block(p: &mut Parser) -> ParseResult<ExprBlock> {
     let start = p.start();
-    let mut args = p.many1(parse_expr)?;
-    if args.len() == 1 {
-        Ok(args.pop().unwrap())
+
+    p.match_token(Token::Do)?;
+    let mut stats = Vec::new();
+    loop {
+        let stat = parse_statment(p)?;
+        if let Stat::Ret(_) = &stat {
+            stats.push(stat);
+            break;
+        } else {
+            stats.push(stat);
+        }
+    }
+
+    let span = p.end(start);
+    Ok(ExprBlock { stats, span })
+}
+
+pub fn parse_statment(p: &mut Parser) -> ParseResult<Stat> {
+    let start = p.start();
+
+    match p.token() {
+        Token::Let => {
+            p.next()?;
+            let name = p.match_var()?;
+
+            let tok = p.token();
+
+            if tok != Token::Equal && tok != Token::BArrow {
+                return Err(Diagnostic::error("Unexpected token")
+                    .desc("expected token Equal or BArrow")
+                    .desc(format!("but found token {}",tok))
+                    .anno(p.span, "here is the token")
+                );
+            } else {
+                p.next()?;
+            }
+
+            let body =  Box::new(parse_expr_chain(p)?);
+            p.match_token(Token::Semicolon)?;
+            let span = p.end(start);
+
+            match tok {
+                Token::Equal => {
+                    Ok(Stat::Let(StatLet { name, body, span }))
+                }
+                Token::BArrow => {
+                    Ok(Stat::Bind(StatBind { name, body, span }))
+                }
+                _ => unreachable!(),
+                
+            }
+        }
+        Token::Return => {
+            p.next()?;
+            let body = Box::new(parse_expr_chain(p)?);
+            p.match_token(Token::Semicolon)?;
+
+            let span = p.end(start);
+            Ok(Stat::Ret(StatRet { body, span }))
+        }
+        _ => {
+            let body = Box::new(parse_expr_chain(p)?);
+            p.match_token(Token::Semicolon)?;
+
+            let span = p.end(start);
+            Ok(Stat::Drop(StatDrop { body, span }))
+        }
+    }
+}
+
+
+
+pub fn parse_expr_chain_inner(p: &mut Parser) -> ParseResult<Expr> {
+    let start = p.start();
+
+    let func = parse_expr(p)?;
+    let args = p.many(parse_expr)?;
+
+    if args.is_empty() {
+        Ok(func)
     } else {
-        let func = Box::new(args.remove(0));
+        let func = Box::new(func);
         let span = p.end(start);
         Ok(Expr::App(ExprApp { func, args, span }))
+    }
+}
+
+pub fn parse_expr_chain(p: &mut Parser) -> ParseResult<Expr> {
+    let start = p.start();
+
+    let head = parse_expr_chain_inner(p)?;
+    let tail = p.many(|p| {
+        let opr = p.match_opr()?;
+        let expr = parse_expr_chain_inner(p)?;
+        Ok((opr, expr))
+    })?;
+
+    if tail.is_empty() {
+        Ok(head)
+    } else {
+        let head = Box::new(head);
+        let span = p.end(start);
+        Ok(Expr::Chain(ExprChain { head, tail, span }))
     }
 }
 
@@ -366,8 +477,10 @@ pub fn parse_expr(p: &mut Parser) -> ParseResult<Expr> {
             Ok(Expr::Lam(res))
         }
         Token::LParen => {
-            let res = parse_expr_app(p)?;
-            Ok(Expr::App(res))
+            p.match_token(Token::LParen)?;
+            let res = parse_expr_chain(p)?;
+            p.match_token(Token::RParen)?;
+            Ok(res)
         }
         Token::Let => {
             let res = parse_expr_let(p)?;
@@ -376,6 +489,10 @@ pub fn parse_expr(p: &mut Parser) -> ParseResult<Expr> {
         Token::Case => {
             let res = parse_expr_case(p)?;
             Ok(Expr::Case(res))
+        }
+        Token::Do => {
+            let res = parse_expr_block(p)?;
+            Ok(Expr::Block(res))
         }
         other => {
             let span = p.end(start);
@@ -403,6 +520,10 @@ pub fn parse_decl(p: &mut Parser) -> ParseResult<Decl> {
             let decl = parse_decl_type(p)?;
             Ok(Decl::Type(decl))
         }
+        Token::Infixl | Token::Infixr | Token::Nonfix => {
+            let decl = parse_decl_opr(p)?;
+            Ok(Decl::Opr(decl))
+        }
         other => {
             let span = p.end(start);
             Err(Diagnostic::error("Unexpected token")
@@ -421,11 +542,10 @@ pub fn parse_decl_val(p: &mut Parser) -> ParseResult<DeclVal> {
     let name = p.match_var()?;
     let args = p.many(|p| p.match_var())?;
     p.match_token(Token::Equal)?;
-    let body = parse_expr_outer(p)?;
+    let body = parse_expr_chain(p)?;
 
     let span = p.end(start);
     Ok(DeclVal { name, args, body, span })
-
 }
 
 pub fn parse_decl_data(p: &mut Parser) -> ParseResult<DeclData> {
@@ -435,7 +555,7 @@ pub fn parse_decl_data(p: &mut Parser) -> ParseResult<DeclData> {
     let name = p.match_upvar()?;
     let args = p.many(|p| p.match_var())?;
     p.match_token(Token::Equal)?;
-    let vars = p.sepby(parse_varient, Token::Bar)?;
+    let vars = p.sepby(Token::Bar, parse_varient)?;
 
     let span = p.end(start);
     Ok(DeclData { name, args, vars, span })
@@ -453,6 +573,25 @@ pub fn parse_decl_type(p: &mut Parser) -> ParseResult<DeclType> {
     Ok(DeclType { name, args, typ, span })
 }
 
+pub fn parse_decl_opr(p: &mut Parser) -> ParseResult<DeclOpr> {
+    let start = p.start();
+
+    let fixity = match p.token() {
+        Token::Infixl => Fixity::Infixl,
+        Token::Infixr => Fixity::Infixr,
+        Token::Nonfix => Fixity::Nonfix,
+        other => return Err(Diagnostic::error("Unexpected token")
+            .desc("expected an operator")
+            .desc(format!("but found token {}", other))
+            .anno(p.span(), "here is the token")),
+    };
+    let name = p.match_var()?;
+    let prec = p.match_int()? as u8;
+    
+    let span = p.end(start);
+    Ok(DeclOpr { name, fixity, prec, span })
+}
+
 pub fn parse_varient(p: &mut Parser) -> ParseResult<Variant> {
     let start = p.start();
 
@@ -464,7 +603,7 @@ pub fn parse_varient(p: &mut Parser) -> ParseResult<Variant> {
 }
 
 pub fn parse_type(p: &mut Parser) -> ParseResult<Type> {
-    let mut tys = p.sepby1(parse_single_type, Token::Arrow)?;
+    let mut tys = p.sepby1(Token::Arrow, parse_single_type)?;
     let mut res = tys.remove(0);
     for ty in tys {
         res = Type::Arr(Box::new(res), Box::new(ty));
@@ -497,7 +636,7 @@ pub fn parse_rule(p: &mut Parser) -> ParseResult<Rule> {
     p.match_token(Token::Bar)?;
     let pat = parse_pattern(p)?;
     p.match_token(Token::EArrow)?;
-    let body = parse_expr(p)?;
+    let body = parse_expr_chain(p)?;
 
     let span = p.end(start);
     Ok(Rule { pat, body, span })
@@ -537,7 +676,7 @@ pub fn parse_pattern(p: &mut Parser) -> ParseResult<Pattern> {
 
 pub fn parse_program(p: &mut Parser) -> ParseResult<Expr> {
     p.match_token(Token::StartOfFile)?;
-    let res = parse_expr_outer(p)?;
+    let res = parse_expr_chain(p)?;
     if p.token() != Token::EndOfFile {
         Err(Diagnostic::error("expecting tokens but file ended"))
     } else {
@@ -557,8 +696,11 @@ fn parser_test() {
             type MyInt = Int
             data Color = Red | Blue | Green
         in
-            casee c of
-            | (Red x 42) => 3
+            case c of
+            | (Red x 42) => do
+                let x = 3 + 2 + 1;
+                let y <- printInt 42;
+                return y;
             | (Blue (Red x 12) Green) => 2
             | Green => 3
             end

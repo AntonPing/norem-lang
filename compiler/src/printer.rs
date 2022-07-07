@@ -226,6 +226,14 @@ impl Printer {
                 }
                 write!(f, ")")
             }
+            Expr::Chain(expr) => {
+                self.print_expr(f, &expr.head)?;
+                for (op,arg) in &expr.tail {
+                    write!(f, " {} ", op)?;
+                    self.print_expr(f, &arg)?;
+                }
+                Ok(())
+            }
             Expr::Let(expr) => {
                 write!(f, "let")?;
                 self.indent(2);
@@ -252,11 +260,48 @@ impl Printer {
                 self.dedent_newline(f, 2)?;
                 write!(f, "end")
             }
+            Expr::Block(expr) => {
+                write!(f, "do")?;
+                self.indent(2);
+                for stat in &expr.stats {
+                    self.newline(f)?;
+                    self.print_stat(f, stat)?;
+                }
+                self.dedent(2);
+                Ok(())
+            }
             _ => {
                 todo!()
             }
         }
     }
+
+    pub fn print_stat(&mut self, f: &mut fmt::Formatter, stat: &Stat) -> fmt::Result {
+        match stat {
+            Stat::Let(stat) => {
+                write!(f, "let {} = ", stat.name)?;
+                self.print_expr(f, &stat.body)?;
+                write!(f, ";")
+            }
+            Stat::Bind(stat) => {
+                write!(f, "let {} <- ", stat.name)?;
+                self.print_expr(f, &stat.body)?;
+                write!(f, ";")
+            }
+            Stat::Drop(stat) => {
+                self.print_expr(f, &stat.body)?;
+                write!(f, ";")
+            }
+            Stat::Ret(stat) => {
+                write!(f, "return ")?;
+                self.print_expr(f, &stat.body)?;
+                write!(f, ";")
+            }
+        } 
+    }
+
+
+
     pub fn print_rule(&mut self, f: &mut fmt::Formatter, rule: &Rule) -> fmt::Result {
         let Rule { pat, body, span: _ } = rule;
         write!(f, "| ")?;

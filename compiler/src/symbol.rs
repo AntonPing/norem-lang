@@ -213,4 +213,15 @@ impl Symbol {
             _ => { panic!("can't convert LitType!"); }
         }
     }
+
+    pub fn is_upper(&self) -> bool {
+        if let Symbol::Var(idx) = self {
+            let mut table = GLOB_TABLE.lock().unwrap();
+            let slice = table.get_str(*idx).unwrap();
+            let ch = slice.chars().nth(0).unwrap();
+            ch.is_uppercase()
+        } else {
+            panic!("generated variable have no such attribute!");
+        }
+    }
 }
