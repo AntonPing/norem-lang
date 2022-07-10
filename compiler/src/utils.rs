@@ -130,7 +130,7 @@ pub fn no_repeat<T: Eq>(vec: Vec<T>) -> bool {
     return true;
 }
 
-/*
+
 #[derive(Clone, Debug, PartialEq)]
 enum EnvOp<K, V> {
     // has such key, old value covered
@@ -213,77 +213,3 @@ impl<K,V> Env<K,V> where K: Eq + Hash + Clone {
     }
 }
 
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum LogLevel {
-    Error,
-    Warn,
-    Info,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Message {
-    pub level: LogLevel,
-    pub title: String,
-    pub lines: Vec<String>,
-    pub span: Span,
-    pub other: Vec<Message>,
-}
-
-trait Logger : Sized {
-    fn into_msg(vec: Vec<Self>) -> Message;
-}
-
-impl Message {
-    pub fn error<S: Into<String>>(span: Span, title: S) -> Message {
-        Message {
-            level: LogLevel::Error,
-            title: title.into(),
-            lines: Vec::new(),
-            span,
-            other: Vec::new(),
-        }
-    }
-
-    pub fn warn<S: Into<String>>(span: Span, title: S) -> Message {
-        Message {
-            level: LogLevel::Warn,
-            title: title.into(),
-            lines: Vec::new(),
-            span,
-            other: Vec::new(),
-        }
-    }
-
-    pub fn info<S: Into<String>>(span: Span, title: S) -> Message {
-        Message {
-            level: LogLevel::Info,
-            title: title.into(),
-            lines: Vec::new(),
-            span,
-            other: Vec::new(),
-        }
-    }
-
-    pub fn message<S: Into<String>>(mut self, span: Span, msg: Message) -> Message {
-        self.other.push(msg);
-        self
-    }
-    pub fn lines(&self) -> std::ops::Range<usize> {
-        let mut range = std::ops::Range {
-            start: self.span.start.row,
-            end: self.span.end.row + 1,
-        };
-
-        for each in &self.other {
-            if each.span.start.row < range.start {
-                range.start = each.span.start.row;
-            }
-            if each.span.end.row + 1 > range.end {
-                range.end = each.span.end.row + 1;
-            }
-        }
-        range
-    }
-}
-    */

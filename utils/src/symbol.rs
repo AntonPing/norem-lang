@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Mutex;
 
-use crate::ast::{Prim, LitType};
 
 lazy_static::lazy_static! {
     static ref GLOB_TABLE: Mutex<SymbTable> = {
@@ -178,7 +177,7 @@ const BUILTIN: [&'static str; S_TOTAL_GLOBALS] = [
     "~",
     "!",
 ];
-
+/* 
 impl Symbol {
     pub fn is_buildin(&self) -> bool {
         if let Symbol::BuiltIn(n) = self {
@@ -220,3 +219,4 @@ impl Symbol {
         }
     }
 }
+*/

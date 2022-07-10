@@ -1,10 +1,8 @@
 [workspace]
 
 members = [
-    # "frontend",
-    # "front",
-    # "back",
-    # "backend",
+    "frontend",
     "compiler",
-    "driver",
+    # "driver",
+    "utils",
 ]

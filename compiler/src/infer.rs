@@ -6,7 +6,6 @@ use crate::error::*;
 use crate::symbol::*;
 use crate::ast::*;
 
-
 impl Type {
     pub fn subst(&self, map: &HashMap<Symbol,Type>) -> Type {
         match self {
@@ -40,6 +39,8 @@ impl Type {
         }
     }
 }
+
+
 
 type InferResult<T> = Result<T,Diagnostic>;
 type InferFunc<T> = fn(&mut Infer) -> InferResult<T>;
@@ -251,13 +252,41 @@ impl Infer {
         }
     }
 
+    pub fn with_var_env<I,F,T>(
+        &mut self,
+        map: I,
+        func: F
+    ) -> InferResult<T> where 
+        I: Iterator<Item = (Symbol,Scheme)>,
+        F: Fn(&mut Self) -> InferResult<T>
+    {
+        let old: Vec<(Symbol,Scheme)> = map.into_iter()
+            .map(|(k,v)| {
+                if let Some(v2) = self.var_env.insert(k, v) {
+                    Some((k,v2))
+                } else {
+                    None
+                }
+            })
+            .filter_map(|x| x)
+            .collect();
+        
+        let res = func(self);
+        // wrong impl
+        for (k,v) in old {
+            self.var_env.insert(k, v);
+        }
+
+        res
+    }
+
     pub fn infer(&mut self, expr: &Expr) -> InferResult<Type> {
         match expr {
-            Expr::Lit(_) => todo!(),
-            Expr::Prim(_) => todo!(),
-            Expr::Var(_) => todo!(),
-            Expr::Lam(_) => todo!(),
-            Expr::App(_) => todo!(),
+            Expr::Lit(expr) => self.infer_lit(expr),
+            Expr::Prim(expr) => self.infer_prim(expr),
+            Expr::Var(expr) => self.infer_var(expr),
+            Expr::Lam(expr) => self.infer_lam(expr),
+            Expr::App(expr) => self.infer_app(expr),
             Expr::Chain(_) => todo!(),
             Expr::Let(_) => todo!(),
             Expr::Case(_) => todo!(),
@@ -324,24 +353,73 @@ impl Infer {
     }
 
     pub fn infer_lam(&mut self, expr: &ExprLam) -> InferResult<Type> {
-        let intros: Vec<(Symbol,Type)> = expr.args.iter()
-            .map(|arg| {
-                let n = self.tempvar();
-                (*arg, Type::Temp(n))
-            })
-            .collect();
-        
-        let old = intros.iter()
-            .map(|(arg,ty)|
-                self.var_env.insert(*arg, Scheme::Mono(ty.clone())))
-            .filter(|x| x.is_some())
-            .collect();
-        
 
-        let ty_body = self.infer(&*expr.body)?;
+        let intro: Vec<usize> = expr.args.iter()
+            .map(|_| self.tempvar())
+            .collect();
 
+        let map: Vec<(Symbol, Scheme)> = expr.args.iter()
+            .zip(intro.iter())
+            .map(|(arg,n)| (*arg, Scheme::Mono(Type::Temp(*n))))
+            .collect();
+
+        let res = self.with_var_env(map.into_iter(), |ti| {
+            ti.infer(&*expr.body)
+        })?;
+
+
+        let res = intro.iter().fold(res, |acc, n| {
+            Type::Arr(Box::new(Type::Temp(*n)), Box::new(acc))
+        });
+
+        Ok(res)
     }
+
+    pub fn infer_app(&mut self, expr: &ExprApp) -> InferResult<Type> {
+
+        let func = self.infer(&expr.func)?;
+        
+        let args: InferResult<Vec<Type>> = expr.args.iter()
+            .map(|arg| self.infer(arg))
+            .collect();
+
+        let args = args?;
+
+        let res = self.tempvar();
+        
+        let func_ty = args.into_iter().rev()
+            .fold(
+                Type::Temp(res), 
+                |acc, ty| {
+                    Type::Arr(Box::new(ty), Box::new(acc))
+                }
+            );
+        
+        self.unify(&func, &func_ty)?;
+
+        Ok(Type::Temp(res))
+    }
+
+    pub fn infer_let(&mut self, expr: &ExprLet) -> InferResult<Type> {
+        let mut var_old = Vec::new();
+        
+
+
+        for decl in &expr.decls {
+            match decl {
+                Decl::Val(_) => todo!(),
+                Decl::Data(_) => todo!(),
+                Decl::Type(_) => todo!(),
+                Decl::Opr(_) => todo!(),
+            }
+        }
+        todo!()
+    }
+
+
+
 }
+
 
 #[test]
 fn checker_test() -> Result<(),String> {
