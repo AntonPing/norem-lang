@@ -1,10 +1,8 @@
-use core::panic;
-
 use crate::ast::*;
-use crate::error::*;
 use crate::lexer::*;
-use crate::symbol::*;
-use crate::utils::*;
+use norem_utils::diagnostic::*;
+use norem_utils::interner::InternStr;
+use norem_utils::position::{ Position, Span };
 
 pub struct Parser<'src> {
     source: &'src str,
@@ -38,15 +36,15 @@ impl<'src> Parser<'src> {
             source: input,
             lexer: Lexer::new(input),
             token: Token::StartOfFile,
-            span: Span::default(),
-            last_end: Position::default(),
+            span: Span::dummy(),
+            last_end: Position::dummy(),
             error: Vec::new(),
         }
     }
 
     pub fn print_err(&self) {
         for err in &self.error {
-            println!("{}",err.report(0, self.source));
+            println!("{}",err.report(self.source, 0));
         }
     }
 
@@ -55,7 +53,7 @@ impl<'src> Parser<'src> {
     }
 
     pub fn span(&self) -> Span {
-        self.span
+        self.span.clone()
     }
 
     pub fn start(&self) -> Position {
@@ -63,7 +61,7 @@ impl<'src> Parser<'src> {
     }
 
     pub fn end(&mut self, start: Position) -> Span {
-        let span = Span::new(start, self.span.end);
+        let span = Span::new(start, self.last_end);
         span
     }
 
@@ -75,9 +73,8 @@ impl<'src> Parser<'src> {
         self.span = span;
         if let Token::BadToken(msg) = tok {
             Err(Diagnostic::error("Bad Token")
-                .desc("an lexer error occured during the lexing pass")
-                .anno(self.span, msg)
-            )
+                .line("an lexer error occured during the lexing pass")
+                .span(self.span(), msg))
         } else {
             Ok(())
         }
@@ -85,7 +82,7 @@ impl<'src> Parser<'src> {
 
     pub fn next_token(&mut self) -> ParseResult<Token> {
         self.next()?;
-        Ok(self.token)  
+        Ok(self.token)
     }
 
     pub fn match_token(&mut self, token: Token) -> ParseResult<()> {
@@ -94,9 +91,9 @@ impl<'src> Parser<'src> {
             Ok(())
         } else {
             Err(Diagnostic::error("Unexpected token")
-                .desc(format!("expected token {}",token))
-                .desc(format!("but found token {}",self.token))
-                .anno(self.span, "here is the token")
+                .line(format!("expected token {}",token))
+                .line(format!("but found token {}",self.token))
+                .span(self.span(), "here is the token")
             )
         }
     }
@@ -107,9 +104,9 @@ impl<'src> Parser<'src> {
             Ok(x)
         } else {
             Err(Diagnostic::error("Unexpected token")
-                .desc("expected an interger token")
-                .desc(format!("but found token {}",self.token))
-                .anno(self.span, "here is the token")
+                .line("expected an interger token")
+                .line(format!("but found token {}",self.token))
+                .span(self.span(), "here is the token")
             )
         }
     }
@@ -122,62 +119,62 @@ impl<'src> Parser<'src> {
             Token::Char(n) => { self.next()?; Ok(LitVal::Char(n)) }
             other => {
                 Err(Diagnostic::error("Unexpected token")
-                    .desc("expected Int, Real, Bool or Char")
-                    .desc(format!("but found token {}",self.token))
-                    .anno(self.span, "here is the token")
+                    .line("expected Int, Real, Bool or Char")
+                    .line(format!("but found token {}", other))
+                    .span(self.span(), "here is the token")
                 )
             }
         }
     }
 
-    pub fn match_var(&mut self) -> ParseResult<Symbol> {
-        if let Token::Var(x) = self.token {
-            self.next()?;
-            Ok(x)
-        } else {
-            Err(Diagnostic::error("Unexpected token")
-                .desc("expected an variable")
-                .desc(format!("but found token {}",self.token))
-                .anno(self.span, "here is the token")
-            )
-        }
-    }
-
-    pub fn match_upvar(&mut self) -> ParseResult<Symbol> {
-        if let Token::UpVar(x) = self.token {
-            self.next()?;
-            Ok(x)
-        } else {
-            Err(Diagnostic::error("Unexpected token")
-                .desc("expected an upper variable")
-                .desc(format!("but found token {}",self.token))
-                .anno(self.span, "here is the token")
-            )
-        }
-    }
-
-    pub fn match_prim(&mut self) -> ParseResult<Symbol> {
+    pub fn match_prim(&mut self) -> ParseResult<Prim> {
         if let Token::Prim(x) = self.token {
             self.next()?;
             Ok(x)
         } else {
             Err(Diagnostic::error("Unexpected token")
-                .desc("expected a primitive")
-                .desc(format!("but found token {}",self.token))
-                .anno(self.span, "here is the token")
+                .line("expected a primitive")
+                .line(format!("but found token {}",self.token))
+                .span(self.span(), "here is the token")
             )
         }
     }
 
-    pub fn match_opr(&mut self) -> ParseResult<Symbol> {
+    pub fn match_var(&mut self) -> ParseResult<InternStr> {
+        if let Token::Var(x) = self.token {
+            self.next()?;
+            Ok(x)
+        } else {
+            Err(Diagnostic::error("Unexpected token")
+                .line("expected an variable")
+                .line(format!("but found token {}",self.token))
+                .span(self.span(), "here is the token")
+            )
+        }
+    }
+
+    pub fn match_upvar(&mut self) -> ParseResult<InternStr> {
+        if let Token::UpVar(x) = self.token {
+            self.next()?;
+            Ok(x)
+        } else {
+            Err(Diagnostic::error("Unexpected token")
+                .line("expected an upper variable")
+                .line(format!("but found token {}",self.token))
+                .span(self.span(), "here is the token")
+            )
+        }
+    }
+
+    pub fn match_opr(&mut self) -> ParseResult<InternStr> {
         if let Token::Opr(x) = self.token {
             self.next()?;
             Ok(x)
         } else {
             Err(Diagnostic::error("Unexpected token")
-                .desc("expected an operator")
-                .desc(format!("but found token {}",self.token))
-                .anno(self.span, "here is the token")
+                .line("expected an operator")
+                .line(format!("but found token {}",self.token))
+                .span(self.span(), "here is the token")
             )
         }
     }
@@ -213,14 +210,10 @@ impl<'src> Parser<'src> {
         &mut self,
         func: ParseFunc<T>,
     ) -> ParseResult<Vec<T>> {
-        match func(self) {
-            Ok(res) => {
-                let mut vec = self.many(func)?;
-                vec.insert(0, res);
-                Ok(vec)
-            }
-            Err(err) => Err(err)
-        }
+        let first = func(self)?;
+        let mut vec = self.many(func)?;
+        vec.insert(0, first);
+        Ok(vec)
     }
 
     pub fn sepby<T>(
@@ -261,50 +254,37 @@ impl<'src> Parser<'src> {
         delim: Token,
         func: ParseFunc<T>,
     ) -> ParseResult<Vec<T>> {
-        match func(self) {
-            Ok(res) => {
-                if self.token == delim {
-                    self.next()?;
-                    let mut vec = self.sepby(delim, func)?;
-                    vec.insert(0, res);
-                    Ok(vec)
-                } else {
-                    Ok(vec![res])
-                }
-            }
-            Err(err) => Err(err)
+        let first = func(self)?;
+        if self.token == delim {
+            self.next()?;
+            let mut vec = self.sepby(delim, func)?;
+            vec.insert(0, first);
+            Ok(vec)
+        } else {
+            Ok(vec![first])
         }
     }
-
-    /*
-    pub fn with_paren<T>(&mut self, func: ParseFunc<T>) -> ParseResult<T> {
-        self.match_token(Token::LParen)?;
-        let res = func(self)?;
-        self.match_token(Token::RParen)?;
-        Ok(res)
-    }
-    */
 }
 
-pub fn parse_expr_var(p: &mut Parser) -> ParseResult<ExprVar> {
+pub fn parse_expr_var(p: &mut Parser) -> ParseResult<ExprVar<InternStr,Span>> {
     let start = p.start();
-    let ident = p.match_var().map_err(|err| err
-        .desc("failed to parse variable")
+    let name = p.match_var().map_err(|err| err
+        .line("failed to parse variable")
     )?;
     let span = p.end(start);
-    Ok(ExprVar { ident, span })
+    Ok(ExprVar { name, ext: span })
 }
 
-pub fn parse_expr_lam(p: &mut Parser) -> ParseResult<ExprLam> {
+pub fn parse_expr_lam(p: &mut Parser) -> ParseResult<ExprLam<InternStr,Span>> {
     let start = p.start();
 
     p.match_token(Token::Fn)?;
     let args = p.many1(|p| p.match_var())?;
     p.match_token(Token::EArrow)?;
-    let body = Box::new(parse_expr_chain(p)?);
+    let body = Box::new(parse_maybe_expr_chain(p)?);
 
     let span = p.end(start);
-    Ok(ExprLam { args, body, span })
+    Ok(ExprLam { args, body, ext: span })
 }
 
 /*
@@ -321,33 +301,40 @@ pub fn parse_expr_app(p: &mut Parser) -> ParseResult<ExprApp> {
 }
 */
 
-pub fn parse_expr_let(p: &mut Parser) -> ParseResult<ExprLet> {
+pub fn parse_expr_let(
+    p: &mut Parser
+) -> ParseResult<ExprLet<InternStr,Span>> {
     let start = p.start();
 
     p.match_token(Token::Let)?;
     let decls = p.many1(parse_decl)?;
     p.match_token(Token::In)?;
-    let body = Box::new(parse_expr_chain(p)?);
+    let body = Box::new(parse_maybe_expr_chain(p)?);
     p.match_token(Token::End)?;
 
     let span = p.end(start);
-    Ok(ExprLet { decls, body, span })
+    Ok(ExprLet { decls, body, ext: span })
 }
 
-pub fn parse_expr_case(p: &mut Parser) -> ParseResult<ExprCase> {
+pub fn parse_expr_case(
+    p: &mut Parser
+) -> ParseResult<ExprCase<InternStr,Span>> {
     let start = p.start();
 
     p.match_token(Token::Case)?;
-    let expr = Box::new(parse_expr_chain(p)?);
+    let expr = Box::new(parse_maybe_expr_chain(p)?);
     p.match_token(Token::Of)?;
     let rules = p.many(parse_rule)?;
     p.match_token(Token::End)?;
 
     let span = p.end(start);
-    Ok(ExprCase { expr, rules, span })
+    Ok(ExprCase { expr, rules, ext: span })
 }
 
-pub fn parse_expr_block(p: &mut Parser) -> ParseResult<ExprBlock> {
+/*
+pub fn parse_expr_block(
+    p: &mut Parser
+) -> ParseResult<ExprBlock<InternStr,Span>> {
     let start = p.start();
 
     p.match_token(Token::Do)?;
@@ -378,9 +365,9 @@ pub fn parse_statment(p: &mut Parser) -> ParseResult<Stat> {
 
             if tok != Token::Equal && tok != Token::BArrow {
                 return Err(Diagnostic::error("Unexpected token")
-                    .desc("expected token Equal or BArrow")
-                    .desc(format!("but found token {}",tok))
-                    .anno(p.span, "here is the token")
+                    .line("expected token Equal or BArrow")
+                    .line(format!("but found token {}",tok))
+                    .span(p.span, "here is the token")
                 );
             } else {
                 p.next()?;
@@ -419,9 +406,11 @@ pub fn parse_statment(p: &mut Parser) -> ParseResult<Stat> {
     }
 }
 
+*/
 
-
-pub fn parse_expr_chain_inner(p: &mut Parser) -> ParseResult<Expr> {
+pub fn parse_maybe_expr_app(
+    p: &mut Parser
+) -> ParseResult<Expr<InternStr,Span>> {
     let start = p.start();
 
     let func = parse_expr(p)?;
@@ -432,17 +421,19 @@ pub fn parse_expr_chain_inner(p: &mut Parser) -> ParseResult<Expr> {
     } else {
         let func = Box::new(func);
         let span = p.end(start);
-        Ok(Expr::App(ExprApp { func, args, span }))
+        Ok(Expr::App(ExprApp { func, args, ext: span }))
     }
 }
 
-pub fn parse_expr_chain(p: &mut Parser) -> ParseResult<Expr> {
+pub fn parse_maybe_expr_chain(
+    p: &mut Parser
+) -> ParseResult<Expr<InternStr,Span>> {
     let start = p.start();
 
-    let head = parse_expr_chain_inner(p)?;
+    let head = parse_maybe_expr_app(p)?;
     let tail = p.many(|p| {
         let opr = p.match_opr()?;
-        let expr = parse_expr_chain_inner(p)?;
+        let expr = parse_maybe_expr_app(p)?;
         Ok((opr, expr))
     })?;
 
@@ -451,22 +442,24 @@ pub fn parse_expr_chain(p: &mut Parser) -> ParseResult<Expr> {
     } else {
         let head = Box::new(head);
         let span = p.end(start);
-        Ok(Expr::Chain(ExprChain { head, tail, span }))
+        Ok(Expr::Chain(ExprChain { head, tail, ext: span }))
     }
 }
 
-pub fn parse_expr(p: &mut Parser) -> ParseResult<Expr> {
+pub fn parse_expr(
+    p: &mut Parser
+) -> ParseResult<Expr<InternStr,Span>> {
     let start = p.start();
     match p.token() {
-        Token::Int(_) | Token::Real(_) | Token::Bool(_) | Token::Char(_) => {
+        Token::Int(_) | Token::Real(_) |
+        Token::Bool(_) | Token::Char(_) => {
             let lit = p.match_lit()?;
             let span = p.end(start);
-            Ok(Expr::Lit(ExprLit { lit, span }))
+            Ok(Expr::Lit(ExprLit { lit, ext: span }))
         }
-        Token::Prim(_) => {
-            let prim = p.match_prim()?.to_prim();
+        Token::Prim(prim) => {
             let span = p.end(start);
-            Ok(Expr::Prim(ExprPrim { prim, span }))
+            Ok(Expr::Prim(ExprPrim { prim, ext: span }))
         }
         Token::Var(_) => {
             let res = parse_expr_var(p)?;
@@ -478,7 +471,7 @@ pub fn parse_expr(p: &mut Parser) -> ParseResult<Expr> {
         }
         Token::LParen => {
             p.match_token(Token::LParen)?;
-            let res = parse_expr_chain(p)?;
+            let res = parse_maybe_expr_chain(p)?;
             p.match_token(Token::RParen)?;
             Ok(res)
         }
@@ -490,22 +483,26 @@ pub fn parse_expr(p: &mut Parser) -> ParseResult<Expr> {
             let res = parse_expr_case(p)?;
             Ok(Expr::Case(res))
         }
+        /*
         Token::Do => {
             let res = parse_expr_block(p)?;
             Ok(Expr::Block(res))
         }
+        */
         other => {
             let span = p.end(start);
             Err(Diagnostic::error("Unexpected token")
-                .desc("failed to parse an expression")
-                .desc(format!("first token {} doesn't match any pattern",other))
-                .anno(span, "here is the token")
+                .line("failed to parse an expression")
+                .line(format!("first token {} doesn't match any pattern",other))
+                .span(span, "here is the token")
             )
         }
     }
 }
 
-pub fn parse_decl(p: &mut Parser) -> ParseResult<Decl> {
+pub fn parse_decl(
+    p: &mut Parser
+) -> ParseResult<Decl<InternStr,Span>> {
     let start = p.start();
     match p.token() {
         Token::Val => {
@@ -527,28 +524,32 @@ pub fn parse_decl(p: &mut Parser) -> ParseResult<Decl> {
         other => {
             let span = p.end(start);
             Err(Diagnostic::error("Unexpected token")
-                .desc("failed to parse an declaration")
-                .desc(format!("first token {} doesn't match any pattern",other))
-                .anno(span, "here is the token")
+                .line("failed to parse an declaration")
+                .line(format!("first token {} doesn't match any pattern",other))
+                .span(span, "here is the token")
             )
         }
     }
 }
 
-pub fn parse_decl_val(p: &mut Parser) -> ParseResult<DeclVal> {
+pub fn parse_decl_val(
+    p: &mut Parser
+) -> ParseResult<DeclVal<InternStr,Span>> {
     let start = p.start();
 
     p.match_token(Token::Val)?;
     let name = p.match_var()?;
     let args = p.many(|p| p.match_var())?;
     p.match_token(Token::Equal)?;
-    let body = parse_expr_chain(p)?;
+    let body = parse_maybe_expr_chain(p)?;
 
     let span = p.end(start);
-    Ok(DeclVal { name, args, body, span })
+    Ok(DeclVal { name, args, body, ext: span })
 }
 
-pub fn parse_decl_data(p: &mut Parser) -> ParseResult<DeclData> {
+pub fn parse_decl_data(
+    p: &mut Parser
+) -> ParseResult<DeclData<InternStr,Span>> {
     let start = p.start();
 
     p.match_token(Token::Data)?;
@@ -558,10 +559,12 @@ pub fn parse_decl_data(p: &mut Parser) -> ParseResult<DeclData> {
     let vars = p.sepby(Token::Bar, parse_varient)?;
 
     let span = p.end(start);
-    Ok(DeclData { name, args, vars, span })
+    Ok(DeclData { name, args, vars, ext: span })
 }
 
-pub fn parse_decl_type(p: &mut Parser) -> ParseResult<DeclType> {
+pub fn parse_decl_type(
+    p: &mut Parser
+) -> ParseResult<DeclType<InternStr,Span>> {
     let start = p.start();
 
     p.match_token(Token::Type)?;
@@ -570,10 +573,12 @@ pub fn parse_decl_type(p: &mut Parser) -> ParseResult<DeclType> {
     p.match_token(Token::Equal)?;
     let typ = parse_type(p)?;
     let span = p.end(start);
-    Ok(DeclType { name, args, typ, span })
+    Ok(DeclType { name, args, typ, ext: span })
 }
 
-pub fn parse_decl_opr(p: &mut Parser) -> ParseResult<DeclOpr> {
+pub fn parse_decl_opr(
+    p: &mut Parser
+) -> ParseResult<DeclOpr<InternStr,Span>> {
     let start = p.start();
 
     let fixity = match p.token() {
@@ -581,28 +586,36 @@ pub fn parse_decl_opr(p: &mut Parser) -> ParseResult<DeclOpr> {
         Token::Infixr => Fixity::Infixr,
         Token::Nonfix => Fixity::Nonfix,
         other => return Err(Diagnostic::error("Unexpected token")
-            .desc("expected an operator")
-            .desc(format!("but found token {}", other))
-            .anno(p.span(), "here is the token")),
+            .line("expected infixl, infixr or nonfix")
+            .line(format!("but found token {}", other))
+            .span(p.span(), "here is the token")),
     };
-    let name = p.match_var()?;
-    let prec = p.match_int()? as u8;
     
+    let prec = p.match_int()? as u8;
+    let name = p.match_var()?;
+    p.match_token(Token::Equal)?;
+    // todo: not only lowercase function, but also cons
+    let func = p.match_var()?;
+
     let span = p.end(start);
-    Ok(DeclOpr { name, fixity, prec, span })
+    Ok(DeclOpr { fixity, prec, name, func, ext: span })
 }
 
-pub fn parse_varient(p: &mut Parser) -> ParseResult<Variant> {
+pub fn parse_varient(
+    p: &mut Parser
+) -> ParseResult<Variant<InternStr,Span>> {
     let start = p.start();
 
     let cons = p.match_upvar()?;
     let args = p.many(parse_type)?;
 
     let span = p.end(start);
-    Ok(Variant { cons, args, span })
+    Ok(Variant { cons, args, ext: span })
 }
 
-pub fn parse_type(p: &mut Parser) -> ParseResult<Type> {
+pub fn parse_type(
+    p: &mut Parser
+) -> ParseResult<Type<InternStr>> {
     let mut tys = p.sepby1(Token::Arrow, parse_single_type)?;
     let mut res = tys.remove(0);
     for ty in tys {
@@ -611,15 +624,11 @@ pub fn parse_type(p: &mut Parser) -> ParseResult<Type> {
     Ok(res)
 }
 
-pub fn parse_single_type(p: &mut Parser) -> ParseResult<Type> {
+pub fn parse_single_type(p: &mut Parser) -> ParseResult<Type<InternStr>> {
     match p.token() {
-        Token::LitType(sym) => {
-            if sym.is_buildin() {
-                p.next()?;
-                Ok(Type::Lit(sym.to_lit_type()))
-            } else {
-                panic!("A non-builtin symbol is lexed as Token::LitType!");
-            }
+        Token::LitType(lit) => {
+            p.next_token()?;
+            Ok(Type::Lit(lit))
         }
         Token::LParen => {
             todo!()
@@ -630,19 +639,23 @@ pub fn parse_single_type(p: &mut Parser) -> ParseResult<Type> {
     }
 }
 
-pub fn parse_rule(p: &mut Parser) -> ParseResult<Rule> {
+pub fn parse_rule(
+    p: &mut Parser
+) -> ParseResult<Rule<InternStr,Span>> {
     let start = p.start();
 
     p.match_token(Token::Bar)?;
     let pat = parse_pattern(p)?;
     p.match_token(Token::EArrow)?;
-    let body = parse_expr_chain(p)?;
+    let body = parse_maybe_expr_chain(p)?;
 
     let span = p.end(start);
-    Ok(Rule { pat, body, span })
+    Ok(Rule { pat, body, ext: span })
 }
 
-pub fn parse_pattern(p: &mut Parser) -> ParseResult<Pattern> {
+pub fn parse_pattern(
+    p: &mut Parser
+) -> ParseResult<Pattern<InternStr>> {
     let start = p.start();
 
     match p.token() {
@@ -667,24 +680,24 @@ pub fn parse_pattern(p: &mut Parser) -> ParseResult<Pattern> {
             p.match_token(Token::RParen)?;
             Ok(Pattern::App(cons, args))
         },
-        other => {
-            let span = p.end(start);
+        _other => {
+            let _span = p.end(start);
             Err(Diagnostic::error("Failed to parse a pattern"))
         }
     }
 }
 
-pub fn parse_program(p: &mut Parser) -> ParseResult<Expr> {
+pub fn parse_program(
+    p: &mut Parser
+) -> ParseResult<Expr<InternStr,Span>> {
     p.match_token(Token::StartOfFile)?;
-    let res = parse_expr_chain(p)?;
+    let res = parse_maybe_expr_chain(p)?;
     if p.token() != Token::EndOfFile {
         Err(Diagnostic::error("expecting tokens but file ended"))
     } else {
         Ok(res)
     }
 }
-
-//pub fn parse_program_from_text(text: &str) -> Pas
 
 
 #[test]
@@ -697,10 +710,7 @@ fn parser_test() {
             data Color = Red | Blue | Green
         in
             case c of
-            | (Red x 42) => do
-                let x = 3 + 2 + 1;
-                let y <- printInt 42;
-                return y;
+            | (Red x 42) => 42
             | (Blue (Red x 12) Green) => 2
             | Green => 3
             end
@@ -712,6 +722,6 @@ fn parser_test() {
 
     match res {
         Ok(res) => println!("{res}"),
-        Err(err) => println!("{}",err.report(2, string)),
+        Err(err) => println!("{}",err.report(string,1)),
     }
 }

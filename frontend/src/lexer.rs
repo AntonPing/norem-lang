@@ -242,6 +242,9 @@ impl<'src> Lexer<'src> {
         let end = self.position();
         let span = Span::new(start, end);
         let slice = self.get_slice(start, end);
+        
+
+
         let sym = intern(slice);
         (Token::Opr(sym), span)
     }
@@ -425,9 +428,7 @@ impl<'src> Lexer<'src> {
                 let span = Span::new(start, end);
                 // ignore all char until a whitespace
                 self.skip_satisfy(|ch| !ch.is_ascii_whitespace());
-                (Token::BadToken(
-                    "unknown character!"
-                ), span)
+                (Token::BadToken("unknown character!"), span)
             }
             None => {
                 let end = self.position();
