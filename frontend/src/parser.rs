@@ -3,6 +3,7 @@ use crate::lexer::*;
 use norem_utils::diagnostic::*;
 use norem_utils::interner::InternStr;
 use norem_utils::position::{ Position, Span };
+use norem_utils::symbol::Symbol;
 
 pub struct Parser<'src> {
     source: &'src str,
@@ -140,10 +141,10 @@ impl<'src> Parser<'src> {
         }
     }
 
-    pub fn match_var(&mut self) -> ParseResult<InternStr> {
+    pub fn match_var(&mut self) -> ParseResult<Symbol> {
         if let Token::Var(x) = self.token {
             self.next()?;
-            Ok(x)
+            Ok(Symbol::Var(x))
         } else {
             Err(Diagnostic::error("Unexpected token")
                 .line("expected an variable")
@@ -153,23 +154,49 @@ impl<'src> Parser<'src> {
         }
     }
 
-    pub fn match_upvar(&mut self) -> ParseResult<InternStr> {
+    pub fn match_cons(&mut self) -> ParseResult<Symbol> {
         if let Token::UpVar(x) = self.token {
             self.next()?;
-            Ok(x)
+            Ok(Symbol::Var(x))
         } else {
             Err(Diagnostic::error("Unexpected token")
-                .line("expected an upper variable")
+                .line("expected a constructor")
                 .line(format!("but found token {}",self.token))
                 .span(self.span(), "here is the token")
             )
         }
     }
 
-    pub fn match_opr(&mut self) -> ParseResult<InternStr> {
+    pub fn match_tyvar(&mut self) -> ParseResult<Symbol> {
+        if let Token::Var(x) = self.token {
+            self.next()?;
+            Ok(Symbol::Var(x))
+        } else {
+            Err(Diagnostic::error("Unexpected token")
+                .line("expected an type variable")
+                .line(format!("but found token {}",self.token))
+                .span(self.span(), "here is the token")
+            )
+        }
+    }
+
+    pub fn match_tycons(&mut self) -> ParseResult<Symbol> {
+        if let Token::UpVar(x) = self.token {
+            self.next()?;
+            Ok(Symbol::Var(x))
+        } else {
+            Err(Diagnostic::error("Unexpected token")
+                .line("expected an type constructor")
+                .line(format!("but found token {}",self.token))
+                .span(self.span(), "here is the token")
+            )
+        }
+    }
+
+    pub fn match_opr(&mut self) -> ParseResult<Symbol> {
         if let Token::Opr(x) = self.token {
             self.next()?;
-            Ok(x)
+            Ok(Symbol::Var(x))
         } else {
             Err(Diagnostic::error("Unexpected token")
                 .line("expected an operator")
@@ -266,16 +293,16 @@ impl<'src> Parser<'src> {
     }
 }
 
-pub fn parse_expr_var(p: &mut Parser) -> ParseResult<ExprVar<InternStr,Span>> {
+pub fn parse_expr_var(p: &mut Parser) -> ParseResult<ExprVar> {
     let start = p.start();
     let name = p.match_var().map_err(|err| err
         .line("failed to parse variable")
     )?;
     let span = p.end(start);
-    Ok(ExprVar { name, ext: span })
+    Ok(ExprVar { name, span })
 }
 
-pub fn parse_expr_lam(p: &mut Parser) -> ParseResult<ExprLam<InternStr,Span>> {
+pub fn parse_expr_lam(p: &mut Parser) -> ParseResult<ExprLam> {
     let start = p.start();
 
     p.match_token(Token::Fn)?;
@@ -284,7 +311,7 @@ pub fn parse_expr_lam(p: &mut Parser) -> ParseResult<ExprLam<InternStr,Span>> {
     let body = Box::new(parse_maybe_expr_chain(p)?);
 
     let span = p.end(start);
-    Ok(ExprLam { args, body, ext: span })
+    Ok(ExprLam { args, body, span })
 }
 
 /*
@@ -303,7 +330,7 @@ pub fn parse_expr_app(p: &mut Parser) -> ParseResult<ExprApp> {
 
 pub fn parse_expr_let(
     p: &mut Parser
-) -> ParseResult<ExprLet<InternStr,Span>> {
+) -> ParseResult<ExprLet> {
     let start = p.start();
 
     p.match_token(Token::Let)?;
@@ -313,12 +340,12 @@ pub fn parse_expr_let(
     p.match_token(Token::End)?;
 
     let span = p.end(start);
-    Ok(ExprLet { decls, body, ext: span })
+    Ok(ExprLet { decls, body, span })
 }
 
 pub fn parse_expr_case(
     p: &mut Parser
-) -> ParseResult<ExprCase<InternStr,Span>> {
+) -> ParseResult<ExprCase> {
     let start = p.start();
 
     p.match_token(Token::Case)?;
@@ -328,13 +355,13 @@ pub fn parse_expr_case(
     p.match_token(Token::End)?;
 
     let span = p.end(start);
-    Ok(ExprCase { expr, rules, ext: span })
+    Ok(ExprCase { expr, rules, span })
 }
 
 /*
 pub fn parse_expr_block(
     p: &mut Parser
-) -> ParseResult<ExprBlock<InternStr,Span>> {
+) -> ParseResult<ExprBlock> {
     let start = p.start();
 
     p.match_token(Token::Do)?;
@@ -410,7 +437,7 @@ pub fn parse_statment(p: &mut Parser) -> ParseResult<Stat> {
 
 pub fn parse_maybe_expr_app(
     p: &mut Parser
-) -> ParseResult<Expr<InternStr,Span>> {
+) -> ParseResult<Expr> {
     let start = p.start();
 
     let func = parse_expr(p)?;
@@ -421,13 +448,13 @@ pub fn parse_maybe_expr_app(
     } else {
         let func = Box::new(func);
         let span = p.end(start);
-        Ok(Expr::App(ExprApp { func, args, ext: span }))
+        Ok(Expr::App(ExprApp { func, args, span }))
     }
 }
 
 pub fn parse_maybe_expr_chain(
     p: &mut Parser
-) -> ParseResult<Expr<InternStr,Span>> {
+) -> ParseResult<Expr> {
     let start = p.start();
 
     let head = parse_maybe_expr_app(p)?;
@@ -442,24 +469,24 @@ pub fn parse_maybe_expr_chain(
     } else {
         let head = Box::new(head);
         let span = p.end(start);
-        Ok(Expr::Chain(ExprChain { head, tail, ext: span }))
+        Ok(Expr::Chain(ExprChain { head, tail, span }))
     }
 }
 
 pub fn parse_expr(
     p: &mut Parser
-) -> ParseResult<Expr<InternStr,Span>> {
+) -> ParseResult<Expr> {
     let start = p.start();
     match p.token() {
         Token::Int(_) | Token::Real(_) |
         Token::Bool(_) | Token::Char(_) => {
             let lit = p.match_lit()?;
             let span = p.end(start);
-            Ok(Expr::Lit(ExprLit { lit, ext: span }))
+            Ok(Expr::Lit(ExprLit { lit, span }))
         }
         Token::Prim(prim) => {
             let span = p.end(start);
-            Ok(Expr::Prim(ExprPrim { prim, ext: span }))
+            Ok(Expr::Prim(ExprPrim { prim, span }))
         }
         Token::Var(_) => {
             let res = parse_expr_var(p)?;
@@ -502,7 +529,7 @@ pub fn parse_expr(
 
 pub fn parse_decl(
     p: &mut Parser
-) -> ParseResult<Decl<InternStr,Span>> {
+) -> ParseResult<Decl> {
     let start = p.start();
     match p.token() {
         Token::Val => {
@@ -534,7 +561,7 @@ pub fn parse_decl(
 
 pub fn parse_decl_val(
     p: &mut Parser
-) -> ParseResult<DeclVal<InternStr,Span>> {
+) -> ParseResult<DeclVal> {
     let start = p.start();
 
     p.match_token(Token::Val)?;
@@ -544,41 +571,41 @@ pub fn parse_decl_val(
     let body = parse_maybe_expr_chain(p)?;
 
     let span = p.end(start);
-    Ok(DeclVal { name, args, body, ext: span })
+    Ok(DeclVal { name, args, body, span })
 }
 
 pub fn parse_decl_data(
     p: &mut Parser
-) -> ParseResult<DeclData<InternStr,Span>> {
+) -> ParseResult<DeclData> {
     let start = p.start();
 
     p.match_token(Token::Data)?;
-    let name = p.match_upvar()?;
-    let args = p.many(|p| p.match_var())?;
+    let name = p.match_tycons()?;
+    let args = p.many(|p| p.match_tyvar())?;
     p.match_token(Token::Equal)?;
     let vars = p.sepby(Token::Bar, parse_varient)?;
 
     let span = p.end(start);
-    Ok(DeclData { name, args, vars, ext: span })
+    Ok(DeclData { name, args, vars, span })
 }
 
 pub fn parse_decl_type(
     p: &mut Parser
-) -> ParseResult<DeclType<InternStr,Span>> {
+) -> ParseResult<DeclType> {
     let start = p.start();
 
     p.match_token(Token::Type)?;
-    let name = p.match_upvar()?;
+    let name = p.match_cons()?;
     let args = p.many(|p| p.match_var())?;
     p.match_token(Token::Equal)?;
     let typ = parse_type(p)?;
     let span = p.end(start);
-    Ok(DeclType { name, args, typ, ext: span })
+    Ok(DeclType { name, args, typ, span })
 }
 
 pub fn parse_decl_opr(
     p: &mut Parser
-) -> ParseResult<DeclOpr<InternStr,Span>> {
+) -> ParseResult<DeclOpr> {
     let start = p.start();
 
     let fixity = match p.token() {
@@ -598,24 +625,24 @@ pub fn parse_decl_opr(
     let func = p.match_var()?;
 
     let span = p.end(start);
-    Ok(DeclOpr { fixity, prec, name, func, ext: span })
+    Ok(DeclOpr { fixity, prec, name, func, span })
 }
 
 pub fn parse_varient(
     p: &mut Parser
-) -> ParseResult<Variant<InternStr,Span>> {
+) -> ParseResult<Variant> {
     let start = p.start();
 
-    let cons = p.match_upvar()?;
+    let cons = p.match_cons()?;
     let args = p.many(parse_type)?;
 
     let span = p.end(start);
-    Ok(Variant { cons, args, ext: span })
+    Ok(Variant { cons, args, span })
 }
 
 pub fn parse_type(
     p: &mut Parser
-) -> ParseResult<Type<InternStr>> {
+) -> ParseResult<Type> {
     let mut tys = p.sepby1(Token::Arrow, parse_single_type)?;
     let mut res = tys.remove(0);
     for ty in tys {
@@ -624,7 +651,7 @@ pub fn parse_type(
     Ok(res)
 }
 
-pub fn parse_single_type(p: &mut Parser) -> ParseResult<Type<InternStr>> {
+pub fn parse_single_type(p: &mut Parser) -> ParseResult<Type> {
     match p.token() {
         Token::LitType(lit) => {
             p.next_token()?;
@@ -641,7 +668,7 @@ pub fn parse_single_type(p: &mut Parser) -> ParseResult<Type<InternStr>> {
 
 pub fn parse_rule(
     p: &mut Parser
-) -> ParseResult<Rule<InternStr,Span>> {
+) -> ParseResult<Rule> {
     let start = p.start();
 
     p.match_token(Token::Bar)?;
@@ -650,12 +677,12 @@ pub fn parse_rule(
     let body = parse_maybe_expr_chain(p)?;
 
     let span = p.end(start);
-    Ok(Rule { pat, body, ext: span })
+    Ok(Rule { pat, body, span })
 }
 
 pub fn parse_pattern(
     p: &mut Parser
-) -> ParseResult<Pattern<InternStr>> {
+) -> ParseResult<Pattern> {
     let start = p.start();
 
     match p.token() {
@@ -664,18 +691,18 @@ pub fn parse_pattern(
             let lit = p.match_lit()?;
             Ok(Pattern::Lit(lit))
         }
-        Token::Var(sym) => {
-            p.next()?;
+        Token::Var(_) => {
+            let sym = p.match_var()?;
             Ok(Pattern::Var(sym))
         }
-        Token::UpVar(sym) => {
-            p.next()?;
+        Token::UpVar(_) => {
+            let sym = p.match_cons()?;
             // A constructor without arguments doesn't need parens
             Ok(Pattern::App(sym, Vec::new()))
         }
         Token::LParen => {
             p.match_token(Token::LParen)?;
-            let cons = p.match_upvar()?;
+            let cons = p.match_cons()?;
             let args = p.many(parse_pattern)?;
             p.match_token(Token::RParen)?;
             Ok(Pattern::App(cons, args))
@@ -689,7 +716,7 @@ pub fn parse_pattern(
 
 pub fn parse_program(
     p: &mut Parser
-) -> ParseResult<Expr<InternStr,Span>> {
+) -> ParseResult<Expr> {
     p.match_token(Token::StartOfFile)?;
     let res = parse_maybe_expr_chain(p)?;
     if p.token() != Token::EndOfFile {

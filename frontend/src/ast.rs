@@ -1,5 +1,6 @@
-use std::fmt;
-use std::fmt::Display;
+use norem_utils::symbol::Symbol;
+use norem_utils::position::Span;
+
 
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub enum LitVal {
@@ -41,127 +42,126 @@ impl Prim {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Expr<Ident,Extra = ()> {
-    Lit(ExprLit<Extra>),
-    Prim(ExprPrim<Extra>),
-    Var(ExprVar<Ident,Extra>),
-    Lam(ExprLam<Ident,Extra>),
-    App(ExprApp<Ident,Extra>),
+pub enum Expr {
+    Lit(ExprLit),
+    Prim(ExprPrim),
+    Var(ExprVar),
+    Lam(ExprLam),
+    App(ExprApp),
     // chain will be desugared
-    Chain(ExprChain<Ident,Extra>),
-    Let(ExprLet<Ident,Extra>),
-    Case(ExprCase<Ident,Extra>),
+    Chain(ExprChain),
+    Let(ExprLet),
+    Case(ExprCase),
     // Block(ExprBlock),
     // Rec(Vec<Row<Expr>>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ExprLit<Extra = ()>  {
+pub struct ExprLit  {
     pub lit: LitVal,
-    pub ext: Extra,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ExprPrim<Extra = ()> {
+pub struct ExprPrim {
     pub prim: Prim,
-    pub ext: Extra,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ExprVar<Ident, Extra = ()> {
-    pub name: Ident,
-    pub ext: Extra,
+pub struct ExprVar {
+    pub name: Symbol,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ExprLam<Ident,Extra = ()> {
-    pub args: Vec<Ident>,
-    pub body: Box<Expr<Ident,Extra>>,
-    pub ext: Extra,
+pub struct ExprLam {
+    pub args: Vec<Symbol>,
+    pub body: Box<Expr>,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ExprApp<Ident, Extra = ()> {
-    pub func: Box<Expr<Ident,Extra>>,
-    pub args: Vec<Expr<Ident,Extra>>,
-    pub ext: Extra
+pub struct ExprApp {
+    pub func: Box<Expr>,
+    pub args: Vec<Expr>,
+    pub span: Span
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ExprChain<Ident, Extra = ()> {
-    pub head: Box<Expr<Ident,Extra>>,
-    pub tail: Vec<(Ident,Expr<Ident,Extra>)>,
-    pub ext: Extra
+pub struct ExprChain {
+    pub head: Box<Expr>,
+    pub tail: Vec<(Symbol,Expr)>,
+    pub span: Span
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ExprLet<Ident,Extra = ()> {
-    pub decls: Vec<Decl<Ident,Extra>>,
-    pub body: Box<Expr<Ident,Extra>>,
-    pub ext: Extra,
+pub struct ExprLet {
+    pub decls: Vec<Decl>,
+    pub body: Box<Expr>,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ExprCase<Ident,Extra = ()> {
-    pub expr: Box<Expr<Ident,Extra>>,
-    pub rules: Vec<Rule<Ident,Extra>>,
-    pub ext: Extra
+pub struct ExprCase {
+    pub expr: Box<Expr>,
+    pub rules: Vec<Rule>,
+    pub span: Span
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Decl<Ident,Extra = ()> {
-    Val(DeclVal<Ident,Extra>),
-    Data(DeclData<Ident,Extra>),
-    Type(DeclType<Ident,Extra>),
-    Opr(DeclOpr<Ident,Extra>),
+pub enum Decl {
+    Val(DeclVal),
+    Data(DeclData),
+    Type(DeclType),
+    Opr(DeclOpr),
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct DeclVal<Ident,Extra = ()> {
-    pub name: Ident,
-    pub args: Vec<Ident>,
-    pub body: Expr<Ident,Extra>,
-    pub ext: Extra
+pub struct DeclVal {
+    pub name: Symbol,
+    pub args: Vec<Symbol>,
+    pub body: Expr,
+    pub span: Span
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct DeclData<Ident,Extra = ()> {
-    pub name: Ident,
-    pub args: Vec<Ident>,
-    pub vars: Vec<Variant<Ident,Extra>>,
-    pub ext: Extra
+pub struct DeclData {
+    pub name: Symbol,
+    pub args: Vec<Symbol>,
+    pub vars: Vec<Variant>,
+    pub span: Span
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Variant<Ident,Extra = ()> {
-    pub cons: Ident,
-    pub args: Vec<Type<Ident>>,
-    pub ext: Extra
+pub struct Variant {
+    pub cons: Symbol,
+    pub args: Vec<Type>,
+    pub span: Span
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct DeclType<Ident,Extra = ()> {
-    pub name: Ident,
-    pub args: Vec<Ident>,
-    pub typ: Type<Ident>,
-    pub ext: Extra
+pub struct DeclType {
+    pub name: Symbol,
+    pub args: Vec<Symbol>,
+    pub typ: Type,
+    pub span: Span
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Rule<Ident,Extra = ()> {
-    pub pat: Pattern<Ident>,
-    pub body: Expr<Ident,Extra>,
-    pub ext: Extra
+pub struct Rule {
+    pub pat: Pattern,
+    pub body: Expr,
+    pub span: Span
 }
 
-
 #[derive(Clone, Debug, PartialEq)]
-pub struct DeclOpr<Ident,Extra = ()> {
+pub struct DeclOpr {
     pub fixity: Fixity,
     pub prec: u8,
-    pub name: Ident,
-    pub func: Ident,
-    pub ext: Extra
+    pub name: Symbol,
+    pub func: Symbol,
+    pub span: Span
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
@@ -175,7 +175,7 @@ pub enum Fixity {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExprBlock {
     pub stats: Vec<Stat>, 
-    pub ext: Extra
+    pub ext: Span
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -194,37 +194,37 @@ pub enum Stat {
 pub struct StatLet {
     pub name: Symbol,
     pub body: Box<Expr>,
-    pub ext: Extra
+    pub ext: Span
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StatBind {
     pub name: Symbol,
     pub body: Box<Expr>,
-    pub ext: Extra
+    pub ext: Span
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StatDrop {
     pub body: Box<Expr>,
-    pub ext: Extra
+    pub ext: Span
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StatRet {
     pub body: Box<Expr>,
-    pub ext: Extra
+    pub ext: Span
 }
 */
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Pattern<Ident> {
+pub enum Pattern {
     /// Constant
     Lit(LitVal),
     /// Variable binding
-    Var(Ident),
+    Var(Symbol),
     /// Algebraic datatype constructor, along with binding pattern
-    App(Ident, Vec<Pattern<Ident>>),
+    App(Symbol, Vec<Pattern>),
     /// List pattern [pat1, ... patN]
     // List(Vec<Pat>),
     /// Record pattern { label1, label2 }, and whether it's flexible or not
@@ -233,27 +233,27 @@ pub enum Pattern<Ident> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Type<Ident> {
+pub enum Type {
     Lit(LitType),
-    Var(Ident),
-    Arr(Box<Type<Ident>>, Box<Type<Ident>>),
-    App(Box<Type<Ident>>, Box<Type<Ident>>),
-    // Rec(Vec<Row<Type<Ident>>>),
-    // Temp(usize),
+    Var(Symbol),
+    Arr(Box<Type>, Box<Type>),
+    App(Box<Type>, Box<Type>),
+    // Rec(Vec<Row<Type>>),
+    Temp(usize),
 }
 /*
 #[derive(Clone, Debug, PartialEq)]
 pub struct Row<T> {
     pub name: Symbol,
     pub data: Box<T>,
-    pub ext: Extra
+    pub ext: Span
 }
 */
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Scheme<Ident> {
-    Mono(Type<Ident>),
-    Poly(Vec<Ident>, Type<Ident>),
+pub enum Scheme {
+    Mono(Type),
+    Poly(Vec<Symbol>, Type),
 }
 /*
 impl Expr {
@@ -335,7 +335,7 @@ pub fn make_record_pat(v: Vec<Pat>, flex: bool) -> PatKind {
 pub struct Row<T> {
     pub label: Symbol,
     pub data: T,
-    pub ext: Extra
+    pub ext: Span
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
@@ -347,3 +347,31 @@ pub enum Fixity {
 
 
 */
+
+impl Expr {
+    pub fn get_ext(self) -> Span {
+        match self {
+            Expr::Lit(expr) => expr.span,
+            Expr::Prim(expr) => expr.span,
+            Expr::Var(expr) => expr.span,
+            Expr::Lam(expr) => expr.span,
+            Expr::App(expr) => expr.span,
+            Expr::Chain(expr) => expr.span,
+            Expr::Let(expr) => expr.span,
+            Expr::Case(expr) => expr.span,
+        }
+    }
+
+    pub fn get_ext_ref(&self) -> &Span {
+        match &self {
+            Expr::Lit(expr) => &expr.span,
+            Expr::Prim(expr) => &expr.span,
+            Expr::Var(expr) => &expr.span,
+            Expr::Lam(expr) => &expr.span,
+            Expr::App(expr) => &expr.span,
+            Expr::Chain(expr) => &expr.span,
+            Expr::Let(expr) => &expr.span,
+            Expr::Case(expr) => &expr.span,
+        }
+    }
+}

@@ -1,4 +1,3 @@
-use core::slice;
 use std::fmt;
 use std::iter::Peekable;
 use std::str::Chars;
@@ -6,6 +5,7 @@ use std::str::Chars;
 use crate::ast::{Prim, LitType};
 use norem_utils::interner::{InternStr, intern};
 use norem_utils::position::{Position, Span};
+use norem_utils::symbol::Symbol;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Token {
@@ -242,11 +242,7 @@ impl<'src> Lexer<'src> {
         let end = self.position();
         let span = Span::new(start, end);
         let slice = self.get_slice(start, end);
-        
-
-
-        let sym = intern(slice);
-        (Token::Opr(sym), span)
+        (Token::Opr(intern(slice)), span)
     }
 
     pub fn next_token(&mut self) -> (Token, Span) {
@@ -378,11 +374,11 @@ impl<'src> Lexer<'src> {
                 if let Some(res) = as_keyword(slice) {
                     (res, span)
                 } else {
-                    let sym = intern(slice);
+                    let s = intern(slice);
                     if upper {
-                        (Token::UpVar(sym), span)
+                        (Token::UpVar(s), span)
                     } else {
-                        (Token::Var(sym), span)
+                        (Token::Var(s), span)
                     }
                 }
             }

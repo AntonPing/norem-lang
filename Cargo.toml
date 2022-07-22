@@ -2,6 +2,7 @@
 
 members = [
     "frontend",
+    "backend",
     "compiler",
     # "driver",
     "utils",

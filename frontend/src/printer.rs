@@ -2,16 +2,6 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::fmt::{self, Display};
 use crate::ast::*;
-//use itertools::Itertools;
-
-/*
-impl fmt::Display for Expr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut pr = Printer::new(50);
-        pr.print_expr(f, self)
-    }
-}
-*/
 
 struct NewLine;
 struct Indent;
@@ -45,14 +35,14 @@ impl Display for NewLine {
 }
 
 impl Display for Indent {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter) -> fmt::Result {
         unsafe { INDENT_COUNT += 1; }
         Ok(())
     }
 }
 
 impl Display for Dedent {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter) -> fmt::Result {
         unsafe { INDENT_COUNT -= 1; }
         Ok(())
     }
@@ -90,9 +80,7 @@ impl Display for Fixity {
     }
 }
 
-impl<Ident,Extra> Display for Expr<Ident,Extra> where
-    Ident: Display,
-{
+impl Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Expr::Lit(expr) => write!(f, "{expr}"),
@@ -107,34 +95,30 @@ impl<Ident,Extra> Display for Expr<Ident,Extra> where
     }
 }
 
-impl<Extra> Display for ExprLit<Extra> {
+impl Display for ExprLit {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ExprLit { lit, ext: _ } = self;
+        let ExprLit { lit, span: _ } = self;
         write!(f, "{lit}")
     }
 }
 
-impl<Extra> Display for ExprPrim<Extra> {
+impl Display for ExprPrim {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ExprPrim { prim, ext: _ } = self;
+        let ExprPrim { prim, span: _ } = self;
         write!(f, "{prim}")
     }
 }
 
-impl<Ident,Extra> Display for ExprVar<Ident, Extra> where
-    Ident: Display,
-{
+impl Display for ExprVar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ExprVar { name, ext: _ } = self;
+        let ExprVar { name, span: _ } = self;
         write!(f, "{name}")
     }
 }
 
-impl<Ident,Extra> Display for ExprLam<Ident, Extra> where
-    Ident: Display,
-{
+impl Display for ExprLam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ExprLam { args, body, ext: _ } = self;
+        let ExprLam { args, body, span: _ } = self;
         write!(f, "fn")?;
         for arg in args {
             write!(f, " {arg}")?;
@@ -143,11 +127,9 @@ impl<Ident,Extra> Display for ExprLam<Ident, Extra> where
     }
 }
 
-impl<Ident,Extra> Display for ExprApp<Ident, Extra> where
-    Ident: Display,
-{
+impl Display for ExprApp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ExprApp { func, args, ext: _ } = self;
+        let ExprApp { func, args, span: _ } = self;
         write!(f, "{func}")?;
         for arg in args {
             write!(f, " {arg}")?;
@@ -156,11 +138,9 @@ impl<Ident,Extra> Display for ExprApp<Ident, Extra> where
     }
 }
 
-impl<Ident,Extra> Display for ExprChain<Ident, Extra> where
-    Ident: Display,
-{
+impl Display for ExprChain {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ExprChain { head, tail, ext: _ } = self;
+        let ExprChain { head, tail, span: _ } = self;
         write!(f,"{head}")?;
         for (op,expr) in tail {
             write!(f, " {op} {expr}")?;
@@ -169,11 +149,9 @@ impl<Ident,Extra> Display for ExprChain<Ident, Extra> where
     }
 }
 
-impl<Ident,Extra> Display for ExprLet<Ident, Extra> where
-    Ident: Display,
-{
+impl Display for ExprLet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ExprLet { decls, body, ext: _ } = self;
+        let ExprLet { decls, body, span: _ } = self;
 
         write!(f, "let {INDENT}")?;
         for decl in decls {
@@ -188,11 +166,9 @@ impl<Ident,Extra> Display for ExprLet<Ident, Extra> where
 }
 
 
-impl<Ident,Extra> Display for ExprCase<Ident, Extra> where
-    Ident: Display,
-{
+impl Display for ExprCase {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ExprCase { expr, rules, ext: _ } = self;
+        let ExprCase { expr, rules, span: _ } = self;
 
         write!(f, "case {expr} of {INDENT}")?;
         for rule in rules {
@@ -204,9 +180,7 @@ impl<Ident,Extra> Display for ExprCase<Ident, Extra> where
     }
 }
 
-impl<Ident,Extra> Display for Decl<Ident,Extra> where
-    Ident: Display,
-{
+impl Display for Decl {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Decl::Val(decl) => write!(f,"{decl}"),
@@ -217,11 +191,9 @@ impl<Ident,Extra> Display for Decl<Ident,Extra> where
     }
 }
 
-impl<Ident,Extra> Display for DeclVal<Ident,Extra> where
-    Ident: Display,
-{
+impl Display for DeclVal {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let DeclVal { name, args, body, ext: _ } = self;
+        let DeclVal { name, args, body, span: _ } = self;
 
         write!(f, "val {name}")?;
         for arg in args {
@@ -233,11 +205,9 @@ impl<Ident,Extra> Display for DeclVal<Ident,Extra> where
     }
 }
 
-impl<Ident,Extra> Display for DeclData<Ident,Extra> where
-    Ident: Display,
-{
+impl Display for DeclData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let DeclData { name, args, vars, ext: _ } = self;
+        let DeclData { name, args, vars, span: _ } = self;
         write!(f, "data {name}")?;
         for arg in args {
             write!(f, " {arg}")?;
@@ -251,11 +221,9 @@ impl<Ident,Extra> Display for DeclData<Ident,Extra> where
 }
 
 
-impl<Ident,Extra> Display for DeclType<Ident,Extra> where
-    Ident: Display,
-{
+impl Display for DeclType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let DeclType { name, args, typ, ext: _ } = self;
+        let DeclType { name, args, typ, span: _ } = self;
         write!(f, "type {name}")?;
         for arg in args {
             write!(f, " {arg}")?;
@@ -264,11 +232,9 @@ impl<Ident,Extra> Display for DeclType<Ident,Extra> where
     }
 }
 
-impl<Ident,Extra> Display for DeclOpr<Ident,Extra> where
-    Ident: Display,
-{
+impl Display for DeclOpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let DeclOpr { name, fixity, prec, func, ext: _ } = self;
+        let DeclOpr { name, fixity, prec, func, span: _ } = self;
         let fixity = match fixity {
             Fixity::Infixl => "infixl",
             Fixity::Infixr => "infixr",
@@ -278,38 +244,29 @@ impl<Ident,Extra> Display for DeclOpr<Ident,Extra> where
     }
 }
 
-impl<Ident> Display for Type<Ident> where
-    Ident: Display,
-{
+impl Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "<type>")
     }
 }
 
-impl<Ident,Extra> Display for Variant<Ident,Extra> where
-    Ident: Display,
-{
+impl Display for Variant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "<varient>")
     }
 }
 
-impl<Ident,Extra> Display for Rule<Ident,Extra> where
-    Ident: Display,
-{
+impl Display for Rule {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "<rule>")
     }
 }
 
-impl<Ident> Display for Pattern<Ident> where
-    Ident: Display,
-{
+impl Display for Pattern {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "<pattern>")
     }
 }
-
 
 /*
 
